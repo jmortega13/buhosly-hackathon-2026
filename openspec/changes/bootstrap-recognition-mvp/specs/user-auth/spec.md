@@ -1,41 +1,60 @@
 ## ADDED Requirements
 
-### Requirement: Pre-seeded user identities
+### Requirement: Sign in with Google only
 
-The system SHALL maintain a user record for every Synacy employee who is to use the app. User records SHALL be created administratively (no self-service signup in MVP). Each user record MUST include a unique id, email, display name, BCrypt-hashed password, monthly giving balance, the month that giving balance applies to, earned balance, and a creation timestamp.
+The system SHALL authenticate users **exclusively via Google Sign-In** (Google Identity Services). There is no email-and-password form, no self-signup form, no admin pre-seed of credentials, and no user-entered field of any kind beyond Google's account-chooser. Sign-in completes by the client posting a Google-issued ID token to the server, which verifies the token and exchanges it for an application JWT.
 
-#### Scenario: New user is seeded
+#### Scenario: Valid Google ID token returns an app JWT
 
-- **WHEN** an administrator adds a row to the `users` sheet with email, name, and password hash
-- **THEN** the user can authenticate with their email and the corresponding plaintext password on the next login attempt
+- **WHEN** a client POSTs a Google-issued ID token whose signature verifies against Google's published JWKS, whose `aud` matches the configured Google OAuth client id, whose `exp` is in the future, and whose email domain is on the allowed list
+- **THEN** the system responds with HTTP 200, an application-issued JWT bearer token, and the user's profile (`id`, `email`, `name`)
 
-#### Scenario: Self-signup is rejected
+#### Scenario: Invalid Google ID token
 
-- **WHEN** an unauthenticated client calls any signup-style endpoint
-- **THEN** the system SHALL respond with HTTP 404 (no such endpoint exists in MVP)
+- **WHEN** the posted token fails any of: signature verification, audience match, expiration, or required-claim presence (`email`, `email_verified=true`, `name`)
+- **THEN** the system responds with HTTP 401 with a generic "invalid sign-in" message and does NOT create a user row or issue a JWT
 
-### Requirement: Email and password login
+#### Scenario: No password endpoints exist
 
-The system SHALL authenticate users with email and password. On success the system MUST return a signed JWT containing the user id and an expiration claim. On failure the system MUST return HTTP 401 with a generic "invalid credentials" message that does NOT reveal whether the email exists.
+- **WHEN** a client calls any endpoint that would imply password-based auth (e.g., `POST /api/v1/auth/login` with `{email, password}`)
+- **THEN** the system responds with HTTP 404 — password authentication is not implemented
 
-#### Scenario: Valid credentials
+### Requirement: Domain allowlist
 
-- **WHEN** a client POSTs valid email and password to the login endpoint
-- **THEN** the system responds with HTTP 200, a JWT bearer token, and the authenticated user's profile (id, email, name)
+The system SHALL only authenticate users whose verified Google email domain appears in the configured allowlist. For the Synacy hackathon launch the allowlist is `synacy.com` and `rise.com`. The list is configured in `application.yml` under `app.auth.allowed-domains` and is admin-editable without code changes.
 
-#### Scenario: Wrong password
+#### Scenario: Allowed domain — synacy.com
 
-- **WHEN** a client POSTs a known email with the wrong password
-- **THEN** the system responds with HTTP 401 and a generic error message
+- **WHEN** the verified Google ID token's email ends with `@synacy.com`
+- **THEN** authentication proceeds to user lookup / JIT provisioning
 
-#### Scenario: Unknown email
+#### Scenario: Allowed domain — rise.com
 
-- **WHEN** a client POSTs an email that does not exist in the `users` sheet
-- **THEN** the system responds with HTTP 401 and the same generic error message used for a wrong password (no user-enumeration leak)
+- **WHEN** the verified Google ID token's email ends with `@rise.com`
+- **THEN** authentication proceeds to user lookup / JIT provisioning
+
+#### Scenario: Disallowed domain
+
+- **WHEN** the verified Google ID token's email ends with any domain not in the configured allowlist (e.g., `@gmail.com`, `@example.com`)
+- **THEN** the system responds with HTTP 403 with the message "domain not allowed" and does NOT create a user row or issue a JWT
+
+### Requirement: Just-in-time user provisioning
+
+On a successful sign-in where the verified email does not match any existing row in the `users` sheet, the system SHALL create a new user row before issuing the JWT. The new row MUST use a server-generated UUID, the `email` and `name` claims from the verified Google ID token, `givingBalance = app.allowance.default-points` (30), `givingMonth = currentMonth("Asia/Manila")`, `earnedBalance = 0`, and `createdAt = now (UTC)`. Email matching MUST be case-insensitive.
+
+#### Scenario: First-time sign-in creates a user row
+
+- **WHEN** an authorized user signs in and their email does not exist in the `users` sheet
+- **THEN** the system appends a new row to `users` with the fields above and then issues the JWT for that row's id
+
+#### Scenario: Returning user sign-in reuses existing row
+
+- **WHEN** an authorized user signs in and their email already exists in the `users` sheet (case-insensitively)
+- **THEN** the system locates the existing row and issues a JWT for its id; no new row is created and no existing field on the row (name, balances, createdAt) is altered as part of sign-in
 
 ### Requirement: Authenticated session via bearer token
 
-All endpoints except login SHALL require a valid JWT in the `Authorization: Bearer <token>` header. Requests without a token, with an expired token, or with an invalid signature MUST be rejected with HTTP 401.
+All endpoints except the Google sign-in endpoint SHALL require a valid application JWT in the `Authorization: Bearer <token>` header. Requests without a token, with an expired token, or with an invalid signature MUST be rejected with HTTP 401.
 
 #### Scenario: Missing token on a protected endpoint
 
@@ -45,7 +64,7 @@ All endpoints except login SHALL require a valid JWT in the `Authorization: Bear
 #### Scenario: Expired token
 
 - **WHEN** a client calls a protected endpoint with a JWT whose expiration is in the past
-- **THEN** the system responds with HTTP 401 and the client is expected to redirect the user to the login page
+- **THEN** the system responds with HTTP 401 and the client is expected to redirect the user to the sign-in page
 
 #### Scenario: Tampered token
 
@@ -54,14 +73,14 @@ All endpoints except login SHALL require a valid JWT in the `Authorization: Bear
 
 ### Requirement: Authenticated user can fetch their own profile
 
-The system SHALL expose an endpoint that returns the currently authenticated user's profile, including id, email, name, current giving balance, current month for that balance, and earned balance. The endpoint MUST NOT return the password hash.
+The system SHALL expose an endpoint that returns the currently authenticated user's profile, including id, email, name, current giving balance, current month for that balance, and earned balance. The endpoint MUST NOT return any internal-only fields.
 
 #### Scenario: Profile fetch
 
 - **WHEN** an authenticated user calls the profile endpoint
-- **THEN** the system responds with their id, email, name, giving balance, giving month, and earned balance, and no password hash
+- **THEN** the system responds with their id, email, name, giving balance, giving month, and earned balance
 
 #### Scenario: Lazy allowance refresh on profile fetch
 
-- **WHEN** an authenticated user calls the profile endpoint and their stored `givingMonth` is earlier than the current month
+- **WHEN** an authenticated user calls the profile endpoint and their stored `givingMonth` is earlier than the current Asia/Manila month
 - **THEN** the system updates that user's `givingBalance` to the configured default and `givingMonth` to the current month, then returns the refreshed values

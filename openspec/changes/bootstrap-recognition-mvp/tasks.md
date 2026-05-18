@@ -1,82 +1,86 @@
 ## 1. Backend project setup
 
-- [ ] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation) at `backend/` with `application.yml` containing: Sheets spreadsheet id + service-account credential path (env-var placeholders, left empty), JWT secret (env-var placeholder), `app.allowance.default-points: 30`, `app.allowance.zone: Asia/Manila`, and `app.hashtags: [teamwork, ownership, impact, kindness]`
-- [ ] 1.2 Add the `google-api-services-sheets` and `google-auth-library-oauth2-http` dependencies and verify the project builds with `./mvnw clean package` (or Gradle equivalent)
-- [ ] 1.3 Configure CORS to allow the Angular dev origin (`http://localhost:4200`) and add a global `RestControllerAdvice` that maps validation errors to HTTP 400 with a `{message}` body
-- [ ] 1.4 Define the `RestController` URL prefix as `/api/v1/...`
+- [x] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation, Spring Security, Spring Data JPA) at `backend/` with `application.yml` containing: `spring.datasource.url` / `username` / `password` (env-var placeholders pointing at the compose Postgres by default), `spring.jpa.hibernate.ddl-auto: validate`, Flyway enabled, JWT secret (env-var placeholder), Google OAuth client id (env-var placeholder), `app.auth.allowed-domains: [synacy.com, rise.com]`, `app.allowance.default-points: 30`, `app.allowance.zone: Asia/Manila`, `app.hashtags: [teamwork, ownership, impact, kindness]`, and `app.feed.{default-page-size,max-page-size}`.
+- [x] 1.2 Add `spring-boot-starter-data-jpa`, `org.postgresql:postgresql`, `org.flywaydb:flyway-core`, and `org.flywaydb:flyway-database-postgresql` dependencies. Keep `google-api-client` (still used by `GoogleIdTokenVerifier`). Verify the project builds with `./mvnw clean package`.
+- [x] 1.3 Configure CORS to allow the Angular dev origin (`http://localhost:4200`) and add a global `RestControllerAdvice` that maps validation errors to HTTP 400 with a `{message}` body and `OptimisticLockException` to HTTP 409 with `{"message": "conflicting concurrent update — please retry"}`.
+- [x] 1.4 Define the `RestController` URL prefix as `/api/v1/...`
 
-## 2. Google Sheets integration layer
+## 2. PostgreSQL + JPA + Flyway data layer
 
-- [ ] 2.1 Build a `SheetsClient` that loads the service-account credential, opens the configured spreadsheet, and exposes typed `readRange`, `appendRow`, and `updateRow` helpers
-- [ ] 2.2 Wire a single-threaded `ExecutorService` and route all write operations (`appendRow`, `updateRow`) through it so concurrent writes serialize
-- [ ] 2.3 Document the expected tab + column layout (`users`, `recognitions`, `rewards`, `redemptions`) in `backend/README.md` per the table in `design.md`, decision 3
-- [ ] 2.4 Add a 60-second in-memory cache for `users` (excluding `passwordHash`) and `rewards` reads
-- [ ] 2.5 Provide a small seeding script or CLI command that writes the four header rows into a fresh spreadsheet so a clean install is one step
+- [x] 2.1 Add `docker-compose.yml` at the repo root: `postgres:16-alpine`, port `5432:5432`, a named volume `pgdata`, env vars `POSTGRES_DB=buhosly POSTGRES_USER=buhosly POSTGRES_PASSWORD=buhosly`. Document `docker compose up -d` in the README.
+- [x] 2.2 Create `backend/src/main/resources/db/migration/V1__init.sql` defining the four tables (`users`, `recognitions`, `rewards`, `redemptions`) per `design.md` decision 4, including: UUID primary keys, foreign-key constraints, `row_version INT NOT NULL DEFAULT 0` on `users` (for `@Version` optimistic locking), `CHECK (amount > 0)` on `recognitions.amount`, and an index on `recognitions(created_at DESC)` for the feed.
+- [x] 2.3 Create `V2__seed_rewards.sql` inserting 4 demo reward rows so a fresh DB is demo-ready out of the box.
+- [x] 2.4 Implement JPA `@Converter`s for `YearMonth` ↔ `VARCHAR(7)` and `List<String>` ↔ comma-separated `VARCHAR`; apply via `@Convert` on the relevant entity fields.
+- [x] 2.5 Document the DB layout, env vars, and `docker compose up -d` / Flyway flow in `backend/README.md`.
 
 ## 3. Domain: user + auth
 
-- [ ] 3.1 Define `User` domain class and `UserRepository` interface; implement `SheetsUserRepository` against the `users` tab
-- [ ] 3.2 Implement `PasswordHasher` using BCrypt (`BCryptPasswordEncoder`)
-- [ ] 3.3 Implement `JwtService` (HS256, server secret from env) with `issue(userId)` and `verify(token) -> userId` methods
-- [ ] 3.4 Implement `POST /api/v1/auth/login` accepting `{email, password}`, returning `{token, user: {id, email, name}}` on success, HTTP 401 with a generic message otherwise (no user-enumeration leak — satisfies `user-auth` Requirement: Email and password login)
-- [ ] 3.5 Implement a Spring Security filter (or simple `OncePerRequestFilter`) that reads `Authorization: Bearer …`, verifies the JWT, and populates a `SecurityContext` with the user id; reject missing/invalid/expired tokens with HTTP 401
-- [ ] 3.6 Implement `GET /api/v1/me` returning the authenticated user's profile (id, email, name, givingBalance, givingMonth, earnedBalance) and applying the lazy monthly refresh (satisfies `user-auth` Requirement: Authenticated user can fetch their own profile)
+- [x] 3.1 Define the `User` `@Entity` (table `users`, columns `id email name giving_balance giving_month earned_balance created_at row_version`) and `UserRepository extends JpaRepository<User, UUID>` with `findByEmailIgnoreCase(String)` derived query.
+- [x] 3.2 Implement `GoogleTokenVerifierService` that uses `GoogleIdTokenVerifier` (from `google-api-client`) to verify a posted Google ID token against the configured `app.auth.google.client-id`, requires `email_verified=true`, and exposes a method returning the verified email + name (or throws `ApiException(401, "invalid sign-in")`).
+- [x] 3.3 Implement `JwtService` (HS256, server secret from env) with `issue(userId)` and `verify(token) -> userId` methods.
+- [x] 3.4 Implement `POST /api/v1/auth/google` accepting `{idToken}`. Steps inside one `@Transactional` method: (1) verify the Google token. (2) lowercase email. (3) reject if domain not in allowlist (HTTP 403). (4) `userRepository.findByEmailIgnoreCase(email).orElseGet(() -> save new User row)`. (5) issue app JWT and return `{token, user: {id, email, name}}`.
+- [x] 3.5 Implement a Spring Security filter (`OncePerRequestFilter`) that reads `Authorization: Bearer …`, verifies the application JWT, and populates a `SecurityContext` with the user id; reject missing/invalid/expired tokens with HTTP 401. Skip the filter for `/api/v1/auth/**`.
+- [x] 3.6 Implement `GET /api/v1/me` returning the authenticated user's profile (id, email, name, givingBalance, givingMonth, earnedBalance) and applying the lazy monthly refresh.
 
 ## 4. Domain: points ledger
 
-- [ ] 4.1 Implement an `AllowanceService.refreshIfNeeded(user)` that, if `user.givingMonth != currentMonth("Asia/Manila")`, sets `givingBalance = app.allowance.default-points` (30) and `givingMonth = currentMonth("Asia/Manila")` and persists the row. Use `ZoneId.of("Asia/Manila")` explicitly — do NOT rely on the JVM default zone. Satisfies `points-ledger` Requirement: Monthly giving allowance refresh.
-- [ ] 4.2 Ensure every "give" or profile-read code path invokes `refreshIfNeeded` exactly once at the entry point
-- [ ] 4.3 Add unit tests for `AllowanceService.refreshIfNeeded`: (a) previous-month `givingMonth` is refreshed to 30 and current Asia/Manila month, (b) same-month users are not touched, (c) boundary case where UTC clock says the 31st but Asia/Manila is already on the 1st — verify the refresh fires
+- [x] 4.1 Implement `AllowanceService.refreshIfNeeded(user)` that, if `user.getGivingMonth() != currentMonth("Asia/Manila")`, mutates the entity in place (`setGivingBalance(default)`, `setGivingMonth(currentMonth)`) and `userRepository.save(user)`. Uses `ZoneId.of("Asia/Manila")` explicitly — never relies on the JVM default zone.
+- [x] 4.2 Ensure every "give" or profile-read code path invokes `refreshIfNeeded` exactly once at the entry point.
+- [x] 4.3 Unit tests for `AllowanceService.refreshIfNeeded`: (a) previous-month is refreshed to 30 and current Asia/Manila month, (b) same-month users are not touched, (c) UTC-says-31st-but-Manila-on-1st boundary fires the refresh.
 
 ## 5. Domain: give recognition
 
-- [ ] 5.1 Define `Recognition` domain class and `RecognitionRepository`; implement `SheetsRecognitionRepository` (append-only)
-- [ ] 5.2 Implement `RecognitionService.give(giverId, recipientIds: List<String>, amount, message, hashtags)` performing, in order: refresh giver allowance → validate `recipientIds` non-empty → validate no duplicate ids in `recipientIds` → validate every recipient id exists → validate giver id is NOT in `recipientIds` → validate `amount > 0` → validate message non-empty → validate hashtags non-empty and all in allowed list → validate `amount × recipientIds.size() ≤ givingBalance` → append one recognition row per recipient (each with a unique UUID, shared `message`/`hashtags`/`createdAt`) → debit giver `givingBalance` by `amount × recipientIds.size()` → credit each recipient's `earnedBalance` by `amount`. All steps inside a single task on the write executor so concurrent givers cannot observe a half-applied state.
-- [ ] 5.3 Map each validation failure to the HTTP status + message specified in `give-recognition/spec.md`: empty recipient list → 400, duplicate recipients → 400, any recipient missing → 404 (identify the missing id(s)), self in recipient list → 400, insufficient total balance → 400, zero/negative amount → 400, empty message → 400, empty hashtags → 400, disallowed hashtag → 400. No partial fulfillment on any failure.
-- [ ] 5.4 Implement `POST /api/v1/recognitions` accepting `{recipientIds: string[], amount: number, message: string, hashtags: string[]}`, calling the service, and returning HTTP 201 with the full list of created recognitions (one per recipient) on success
-- [ ] 5.5 Log an ERROR with full context (giver id, full recipient id list, per-recipient amount, every recognition id appended so far, failure cause) if any sheet write after validation fails, per `give-recognition` Requirement: Recognition write is all-or-nothing
-- [ ] 5.6 Unit tests covering: single-recipient happy path, multi-recipient happy path (asserts N rows appended, giver debited `amount × N`, each recipient credited `amount`), self in recipient list (alone and alongside others), duplicate recipient ids, empty recipient list, total cost exceeds giving balance (boundary: `givingBalance == amount × N − 1`), zero/negative amount, one of several recipients missing, empty message, empty hashtags, disallowed hashtag
+- [x] 5.1 Define `Recognition` `@Entity` (table `recognitions`, columns `id giver_id recipient_id amount message hashtags created_at`) with the hashtags column mapped via the `StringListConverter`; `RecognitionRepository extends JpaRepository<Recognition, UUID>` with `findAllByOrderByCreatedAtDesc(Pageable)`.
+- [x] 5.2 Implement `RecognitionService.give(giverId, recipientIds, amount, message, hashtags)` annotated `@Transactional`: refresh giver allowance → validate (non-empty, no duplicates, recipients exist, giver not in list, amount > 0, message non-blank, hashtags allowed, `amount × N ≤ givingBalance`) → for each recipient INSERT a recognition row + UPDATE recipient earned balance → UPDATE giver giving balance once. Throws on any failure; transaction rolls back.
+- [x] 5.3 Map each validation failure to HTTP per `give-recognition/spec.md`: empty recipient list → 400, duplicate recipients → 400, any recipient missing → 404 (identify ids), self in recipient list → 400, insufficient total balance → 400, zero/negative amount → 400, empty message → 400, empty hashtags → 400, disallowed hashtag → 400.
+- [x] 5.4 Implement `POST /api/v1/recognitions` accepting `{recipientIds: string[], amount: number, message: string, hashtags: string[]}` and returning HTTP 201 with the list of created recognition rows.
+- [x] 5.5 Translate `OptimisticLockException` (raised by the giver's `@Version` column on conflict) to HTTP 409 with `{"message": "conflicting concurrent update — please retry"}` via the global handler.
+- [ ] 5.6 Unit tests covering: single-recipient happy path, multi-recipient happy path (N rows, debit `amount × N`, credit `amount` each), self alone & alongside others, duplicate recipient ids, empty recipient list, total cost exceeds giving balance (boundary), zero/negative amount, one missing recipient, empty message, empty hashtags, disallowed hashtag.
 
 ## 6. Domain: recognition feed
 
-- [ ] 6.1 Implement `GET /api/v1/feed?page=N&size=M` returning the most recent recognitions in reverse-chronological order with a flag indicating whether more pages exist
-- [ ] 6.2 Resolve `giverId` and `recipientId` to `{id, name}` shapes in the response (use the cached `users` read; do not hit the sheet per row)
-- [ ] 6.3 Default `size` to 25; cap `size` at 100 to bound memory and Sheets read volume
-- [ ] 6.4 Unit test the empty-feed case, the first-page case, the past-the-end case, and the response shape
+- [x] 6.1 Implement `GET /api/v1/feed?page=N&size=M` returning the most recent recognitions in reverse-chronological order with a flag indicating whether more pages exist. Uses `findAllByOrderByCreatedAtDesc(Pageable.ofSize(size).withPage(page))`.
+- [x] 6.2 Resolve `giverId` and `recipientId` to `{id, name}` shapes in the response via `userRepository.findAllById(unionOfIds)` so the feed page is one extra query, not N.
+- [x] 6.3 Default `size` to 25; cap at 100 to bound memory and result size.
+- [ ] 6.4 Unit test the empty-feed case, the first-page case, the past-the-end case, and the response shape (no top-level `id` on items).
 
 ## 7. Domain: rewards catalog + redemption
 
-- [ ] 7.1 Define `Reward` and `Redemption` domain classes and their repositories; implement `SheetsRewardRepository` (read-only at runtime; admins edit the sheet directly) and `SheetsRedemptionRepository` (append-only)
-- [ ] 7.2 Implement `GET /api/v1/rewards` returning only rewards where `active = true`
-- [ ] 7.3 Implement `RedemptionService.redeem(userId, rewardId)`: load reward → reject if missing or inactive (404) → reject if `earnedBalance < costPoints` (400) → append redemption row with `status = "pending"` and a snapshot of `costPoints` → debit `earnedBalance`. All steps inside the write executor.
-- [ ] 7.4 Implement `POST /api/v1/redemptions` calling the service and returning HTTP 201
-- [ ] 7.5 Implement `GET /api/v1/redemptions/me` returning the caller's redemption history in reverse-chronological order
-- [ ] 7.6 Unit tests: successful redemption deducts the right amount, insufficient balance is rejected without write, inactive/missing reward returns 404, price snapshot is preserved across later catalog edits
+- [x] 7.1 Define `Reward` `@Entity` (table `rewards`) and `Redemption` `@Entity` (table `redemptions`) and their `JpaRepository` interfaces. `RewardRepository.findAllByActiveTrue()` and `RedemptionRepository.findAllByUserIdOrderByCreatedAtDesc(UUID)` are derived queries.
+- [x] 7.2 Implement `GET /api/v1/rewards` returning only rewards where `active = true`.
+- [x] 7.3 Implement `RedemptionService.redeem(userId, rewardId)` annotated `@Transactional`: load reward (404 if missing/inactive) → load user → reject if `earnedBalance < costPoints` (400) → INSERT redemption row with `status = "pending"` and a snapshot of `costPoints` → debit user `earnedBalance`.
+- [x] 7.4 Implement `POST /api/v1/redemptions` returning HTTP 201.
+- [x] 7.5 Implement `GET /api/v1/redemptions/me` returning the caller's redemption history in reverse-chronological order.
+- [ ] 7.6 Unit tests: successful redemption deducts the right amount, insufficient balance is rejected without write, inactive/missing reward returns 404, `cost_points` snapshot is preserved across later catalog price edits.
 
 ## 8. Frontend: shared infrastructure
 
-- [ ] 8.1 Create `src/environments/environment.ts` with `apiBaseUrl: 'http://localhost:8080/api/v1'`
-- [ ] 8.2 Add an `AuthService` (signal-based) that owns `currentUser`, `token`, persists the token to `localStorage`, and exposes `login(email, password)` and `logout()`
-- [ ] 8.3 Add an HTTP interceptor that attaches `Authorization: Bearer <token>` when a token exists, and on HTTP 401 clears the auth state and redirects to `/login`
-- [ ] 8.4 Add an `AuthGuard` that redirects unauthenticated users to `/login`
+- [x] 8.1 Create `src/environments/environment.ts` with `apiBaseUrl: 'http://localhost:8080/api/v1'` and `googleClientId`.
+- [x] 8.2 Add an `AuthService` (signal-based) that owns `currentUser`, `token`, persists the token to `localStorage`, and exposes `loginWithGoogle(idToken: string)` and `logout()`. No email/password method exists.
+- [x] 8.3 Add an HTTP interceptor that attaches `Authorization: Bearer <token>` when a token exists, and on HTTP 401 clears the auth state and redirects to `/login`.
+- [x] 8.4 Add an `AuthGuard` that redirects unauthenticated users to `/login`.
 
 ## 9. Frontend: routes and pages
 
-- [ ] 9.1 Configure routes: `/login` (public), `/feed` (default, guarded), `/give` (guarded), `/profile` (guarded), `/rewards` (guarded), `/redemptions` (guarded)
-- [ ] 9.2 Build the **Login** page (email + password form, error message on failure, redirects to `/feed` on success)
-- [ ] 9.3 Build the **Feed** page using a `RecognitionService` with signals; show giver name, recipient name, amount, message, hashtag chips, and a relative timestamp; implement "load more" pagination
-- [ ] 9.4 Build the **Give** page: **multi-select recipient picker** (typeahead over `/api/v1/users` — add a small list endpoint if needed) that lets the giver choose one or more teammates and shows the chosen names as removable chips, amount input labelled "per recipient" with a derived "total cost = amount × recipients" preview (validated client-side against the current giving balance), message textarea, hashtag multi-select. The picker MUST exclude the giver themselves and MUST prevent picking the same recipient twice. Submit calls `POST /api/v1/recognitions` with `recipientIds: string[]`; success redirects to `/feed` and shows a toast.
-- [ ] 9.5 Build the **Profile** page showing the user's name, email, current giving balance, the month it applies to, and the earned balance, all sourced from `/api/v1/me`
-- [ ] 9.6 Build the **Rewards** page listing active rewards with name, image, description, cost, and a "Redeem" button disabled when `earnedBalance < costPoints`; on success refresh `earnedBalance` and show a toast
-- [ ] 9.7 Build the **Redemptions** page showing the user's redemption history from `/api/v1/redemptions/me`
-- [ ] 9.8 Add a simple top nav with the user's name + earned/giving balance badges and a logout button
+- [x] 9.1 Configure routes: `/login` (public), `/feed` (default, guarded), `/give` (guarded), `/profile` (guarded), `/rewards` (guarded), `/redemptions` (guarded).
+- [x] 9.2 Build the **Login** page: load Google Identity Services, render the official Google Sign-In button initialised with `environment.googleClientId`, on callback call `AuthService.loginWithGoogle(credential)`; success redirects to `/feed`. No email/password input.
+- [x] 9.3 Build the **Feed** page: signal-based service, show giver name, recipient name, amount, message, hashtag chips, relative timestamp; "load more" pagination.
+- [x] 9.4 Build the **Give** page: multi-select recipient picker (typeahead over `/api/v1/users`), amount-per-recipient input with total-cost preview validated against the giving balance, message textarea, hashtag multi-select. Picker excludes self and prevents duplicate selection. Submit calls `POST /api/v1/recognitions` with `recipientIds: string[]`.
+- [x] 9.5 Build the **Profile** page from `/api/v1/me`.
+- [x] 9.6 Build the **Rewards** page with a "Redeem" button disabled when `earnedBalance < costPoints`; success refreshes balance.
+- [x] 9.7 Build the **Redemptions** page from `/api/v1/redemptions/me`.
+- [x] 9.8 Top nav with name, giving/earned balance badges, logout button.
 
 ## 10. End-to-end verification
 
-- [ ] 10.1 Manually seed the spreadsheet with 3–5 users (one of them yours), 4 rewards, and an empty `recognitions` tab
-- [ ] 10.2 Run `./mvnw spring-boot:run` and `ng serve`, log in as two different users in two browsers, give a recognition from A → B, verify it appears on the feed and that A's giving balance dropped and B's earned balance rose
-- [ ] 10.3 Redeem a reward as B; verify the earned balance drops by the exact cost and a row appears in `redemptions` with `status = "pending"`
-- [ ] 10.4 Manually edit a user row to set `givingMonth` to the previous month; log in and verify the giving balance refreshes to the configured default on the next profile fetch
-- [ ] 10.5 Give a multi-recipient recognition (e.g., A → B + C + D, 10 points each); verify the feed shows three new entries with identical message/hashtags/timestamp, A's giving balance dropped by 30, and B, C, D each gained 10
-- [ ] 10.6 Attempt a self-recognition (A in own recipient list), a recognition whose total cost exceeds A's giving balance, a recognition listing the same recipient twice, a recognition with a disallowed hashtag, and a redemption that exceeds the earned balance; verify each is rejected with the expected status and message and no row/balance was modified
-- [ ] 10.7 Confirm the Sheets-as-DB demo expectation by editing a row directly in the spreadsheet and observing the change reflected in the app after the 60-second cache TTL elapses
+- [ ] 10.1 `docker compose up -d` from the repo root; verify Postgres is healthy (`docker compose ps`).
+- [ ] 10.2 In Google Cloud Console create an OAuth 2.0 Web client, add `http://localhost:4200` as an authorised JavaScript origin, copy the client id into `environment.googleClientId` and the `GOOGLE_CLIENT_ID` backend env var.
+- [ ] 10.3 Export `JWT_SECRET=$(openssl rand -base64 48)`. Start the backend (`cd backend && ./mvnw spring-boot:run`) and confirm Flyway logs `Successfully applied 2 migrations` (or current count) and the schema appears in `psql -h localhost -U buhosly -d buhosly -c '\dt'`.
+- [ ] 10.4 Run `ng serve`, sign in with two `@synacy.com` / `@rise.com` Google accounts in two browsers, verify both rows appear in the `users` table via psql. Give a recognition from A → B; verify feed item appears and that `users.giving_balance` (A) dropped and `earned_balance` (B) rose.
+- [ ] 10.5 Redeem a reward as B; verify `earned_balance` drops by the exact cost and a row appears in `redemptions` with `status = 'pending'`.
+- [ ] 10.6 In psql, set a user's `giving_month` to the previous month (`UPDATE users SET giving_month='2026-04' WHERE email=...`); refresh `/me` and verify the balance is reset to 30 and `giving_month` advances to the current Asia/Manila month.
+- [ ] 10.7 Give a multi-recipient recognition (A → B + C + D, 10 each); verify three new entries with identical message/hashtags/created_at and that A's giving balance dropped by 30 while B, C, D each gained 10.
+- [ ] 10.8 Attempt: self-recognition (A in own recipient list), a give whose total cost exceeds A's balance, a duplicate recipient id, a disallowed hashtag, a redemption that exceeds earned balance. Verify each returns the expected status with no state change.
+- [ ] 10.9 Attempt to sign in with a `@gmail.com` (non-allowlisted) Google account; verify HTTP 403 `"domain not allowed"` and no row is created in `users`.
+- [ ] 10.10 (Optional) Simulate concurrent gives via two parallel curl requests sharing one giver and verify exactly one succeeds while the other returns HTTP 409 `"conflicting concurrent update — please retry"`.
+- [ ] 10.11 Tear down with `docker compose down -v` to drop the volume; verify a clean `docker compose up -d` followed by backend start re-applies all Flyway migrations and the seeded rewards reappear.

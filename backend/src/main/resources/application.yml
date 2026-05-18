@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: buhosly
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/buhosly}
+    username: ${SPRING_DATASOURCE_USERNAME:buhosly}
+    password: ${SPRING_DATASOURCE_PASSWORD:buhosly}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:4200
+
+  jwt:
+    secret: ${JWT_SECRET:}
+    expires-minutes: 720
+
+  auth:
+    allowed-domains:
+      - synacy.com
+      - rise.com
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+
+  allowance:
+    default-points: 30
+    zone: Asia/Manila
+
+  hashtags:
+    - teamwork
+    - ownership
+    - impact
+    - kindness
+
+  feed:
+    default-page-size: 25
+    max-page-size: 100
+
+logging:
+  level:
+    com.synacy.buhosly: INFO

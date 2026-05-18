@@ -1,21 +1,21 @@
 ## Context
 
-This is greenfield work for a Synacy hackathon project. The Angular shell is scaffolded (CLI 21.1.4, SCSS, zoneless, routing) and a Spring Boot service is to be created. The product target — see `proposal.md` — is a Bonusly-style peer recognition app: give monthly-refreshing points to teammates, view a public feed, redeem accumulated earned points for rewards.
+This is greenfield work for a Synacy hackathon project. The Angular shell is scaffolded (CLI 21.1.4, SCSS, zoneless, routing) and a Spring Boot service is being built. The product target — see `proposal.md` — is a Bonusly-style peer recognition app: give monthly-refreshing points to teammates, view a public feed, redeem accumulated earned points for rewards.
 
-The defining constraint, set by the user up front, is that **Google Sheets is the data store**. There is no Postgres / relational DB. This is a deliberate hackathon trade-off: no DB infra to provision, the data is human-readable, and non-technical stakeholders can inspect the spreadsheet directly. Expected load is small (one company, dozens of employees, low concurrency).
+Persistence is **PostgreSQL 16** via Spring Data JPA, with schema owned by Flyway migrations. Local Postgres runs from `docker-compose.yml` at the repo root. (An earlier draft of this proposal had Google Sheets as the data store; that was reversed on 2026-05-18 in favour of a real relational DB with proper transactions, schema enforcement, and indexes.)
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Demonstrable end-to-end loop: log in → give recognition → see it on the feed → earned balance increases → redeem a reward.
-- Backend cleanly decouples domain logic from the Sheets data layer so a relational store can replace Sheets later without rewriting the API surface.
+- Backend cleanly decouples domain logic from the data layer (JPA repositories) so the persistence backend can evolve (e.g., add read replicas, swap the migration tool) without rewriting the API surface.
 - Frontend uses modern Angular (signals, zoneless, standalone components) so the resulting code base is a reasonable starting point if the prototype is greenlit.
 
 **Non-Goals:**
 
 - Production scale, multi-tenancy, or high concurrency.
-- Synacy SSO / Google OAuth login (deferred to a follow-up proposal).
+- Synacy SSO beyond Google Sign-In (deferred to a follow-up proposal).
 - Slack, Microsoft Teams, or any other integration.
 - Admin analytics, exports, audit logs, password reset, email notifications.
 - Comments, reactions, or add-on/pile-on points on recognitions.
@@ -23,92 +23,100 @@ The defining constraint, set by the user up front, is that **Google Sheets is th
 
 ## Decisions
 
-### 1. Stack split: Angular dev server + Spring Boot API
+### 1. Stack split: Angular dev server + Spring Boot API + Postgres container
 
-The Angular app runs under `ng serve` during development and is built as a static bundle for the demo. The Spring Boot service exposes a JSON REST API under `/api/v1/...`. CORS is allowed from the Angular dev origin.
+The Angular app runs under `ng serve` during development and is built as a static bundle for the demo. The Spring Boot service exposes a JSON REST API under `/api/v1/...`. Postgres runs as a container managed by `docker-compose.yml` at the repo root. CORS is allowed from the Angular dev origin.
 
 - **Alternative considered**: serve the Angular bundle directly from Spring Boot. Rejected for the hackathon because losing Angular's hot reload slows iteration far more than it gains in deployment simplicity.
 
-### 2. Google Sheets via service account
+### 2. PostgreSQL + Spring Data JPA
 
-A single Google Spreadsheet is the source of truth. The Spring Boot service authenticates to the Sheets v4 API using a **service-account JSON credential** loaded from an env var. Users do **not** authenticate to Google themselves; the service writes on everyone's behalf.
+PostgreSQL 16 is the source of truth, accessed from the Spring Boot service through Spring Data JPA (Hibernate). Connection details come from env vars (`SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`) with sensible local defaults (`jdbc:postgresql://localhost:5432/buhosly`, user `buhosly`, password `buhosly`) that match the compose file.
 
-- **Alternative considered**: each user OAuths to Google so the app writes as them. Rejected because consistent service identity simplifies cross-user reads/writes (e.g., the feed reads everyone's recognitions) and avoids a per-user OAuth dance.
-- **Trade-off**: the service account is a single privileged actor; if its credential leaks, the whole spreadsheet is exposed. Mitigation: rotate the service account periodically; keep the credential out of the repo.
+- **Alternative considered**: Spring's lightweight `JdbcClient` + plain SQL. Rejected at the user's direction — Spring Data JPA is the in-house Synacy default and provides repository abstractions that other devs at Synacy can extend without re-learning a new data-access style.
+- **Alternative considered**: Google Sheets as the data store (the original draft). Reversed because the Sheets approach lacked transactions, had API quotas, and made schema enforcement awkward — costs that outweighed the "human-readable" benefit once a real DB became cheap to run via Docker.
 
-### 3. Sheet layout
+### 3. Schema migrations via Flyway
 
-One spreadsheet, four tabs:
+Schema is defined entirely by versioned Flyway migration files under `backend/src/main/resources/db/migration/` (`V1__init.sql`, `V2__seed_rewards.sql`, etc.). Spring Boot auto-runs pending migrations on application start. **Hibernate's `ddl-auto` is set to `validate`** — Hibernate never writes DDL itself; it only checks that the running schema matches the entity model.
 
-| Tab            | Columns                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `users`        | `id` (UUID), `email`, `name`, `passwordHash` (BCrypt), `givingBalance` (int), `givingMonth` (YYYY-MM, **Asia/Manila** local time), `earnedBalance` (int), `createdAt` (ISO-8601 UTC) |
-| `recognitions` | `id` (UUID), `giverId`, `recipientId`, `amount` (int), `message`, `hashtags` (comma-sep), `createdAt`                                            |
-| `rewards`      | `id` (UUID), `name`, `description`, `costPoints` (int), `imageUrl`, `active` (bool)                                                              |
-| `redemptions`  | `id` (UUID), `userId`, `rewardId`, `costPoints` (int snapshot), `createdAt`, `status` (`pending`/`fulfilled`/`cancelled`)                        |
+- **Alternative considered**: Hibernate `ddl-auto: update`. Rejected — schema changes need to be reviewable in code, reproducible in CI, and replayable in any environment. `update` silently drifts.
+- **Alternative considered**: Liquibase. Rejected for hackathon simplicity — Flyway's plain-SQL-per-file model is shorter to learn for new contributors.
 
-Row 1 is the header. All IDs are UUIDs (server-generated) so we never rely on Sheets row numbers as identifiers. Rows are **never deleted** — soft-cancel or status flags only — because deletion shifts subsequent row numbers and breaks any cached indices.
+### 4. Database schema
 
-- **Alternative considered**: a single `events` tab with an event-sourced log. Rejected as too clever for a hackathon and harder for non-technical stakeholders to read.
+Four tables, all using `UUID` primary keys generated by the application (never DB-generated, so a row's id is known before the INSERT). No row is ever hard-deleted — `redemptions.status` and `rewards.active` are the soft-delete flags. Each foreign key (`recognitions.giver_id`, `recognitions.recipient_id`, `redemptions.user_id`, `redemptions.reward_id`) is declared with `REFERENCES` for referential integrity.
 
-### 4. Authentication: email/password + JWT
+| Table          | Notable columns                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`        | `id UUID`, `email VARCHAR UNIQUE`, `name VARCHAR`, `giving_balance INT`, `giving_month VARCHAR(7)` (YYYY-MM Asia/Manila), `earned_balance INT`, `created_at TIMESTAMPTZ` — **no password column**, auth is Google-only |
+| `recognitions` | `id UUID`, `giver_id UUID → users.id`, `recipient_id UUID → users.id`, `amount INT CHECK (amount > 0)`, `message TEXT`, `hashtags VARCHAR` (comma-separated, mapped via JPA converter), `created_at TIMESTAMPTZ`, index on `(created_at DESC)` for the feed |
+| `rewards`      | `id UUID`, `name VARCHAR`, `description TEXT`, `cost_points INT`, `image_url VARCHAR`, `active BOOLEAN`                               |
+| `redemptions`  | `id UUID`, `user_id UUID → users.id`, `reward_id UUID → rewards.id`, `cost_points INT` (snapshot at redeem time), `created_at TIMESTAMPTZ`, `status VARCHAR(20)` (`pending` / `fulfilled` / `cancelled`) |
 
-Users are pre-seeded into the `users` tab (no self-signup in MVP). Login takes `{email, password}`, validates the BCrypt hash, and returns a signed JWT (HS256, server secret in env var). The Angular app stores the JWT in `localStorage` and attaches it via an `Authorization: Bearer …` header through an HTTP interceptor. An `AuthGuard` protects all routes except `/login`.
+JPA mapping notes: `YearMonth` is stored as a `VARCHAR(7)` via a `@Converter`; `List<String>` hashtags are stored as comma-separated `VARCHAR` via another `@Converter`. `Instant` maps natively to `TIMESTAMPTZ`.
 
-- **Alternative considered**: defer auth entirely (anyone can act as anyone via a dropdown) for the demo. Rejected because the recognition feed loses meaning if it isn't tied to real identity, and adding auth later means re-doing every endpoint.
-- **Alternative considered**: Google OAuth / Synacy SSO. Deferred — captured as future work, not MVP.
+### 5. Authentication: Google Sign-In + just-in-time provisioning
 
-### 5. Monthly allowance refresh: lazy
+Users sign in **exclusively with Google** (Google Identity Services). The Angular app renders Google's official sign-in button, receives a Google-issued ID token (a JWT signed by Google), and POSTs it to `POST /api/v1/auth/google`. The Spring Boot service uses `GoogleIdTokenVerifier` (from `google-api-client`) to verify the ID token's signature against Google's JWKS, check the audience matches the configured OAuth client id, check expiration, and require `email_verified=true`. If verification passes AND the email domain is in the allowlist (`synacy.com`, `rise.com`), the server looks up the user by email; if no row exists it inserts one (JIT provisioning) with `giving_balance = 30`, `giving_month = currentMonth("Asia/Manila")`, `earned_balance = 0`. Either way the server issues its own JWT (HS256, server secret in env var) which the SPA stores in `localStorage` and attaches as `Authorization: Bearer …` through an HTTP interceptor. An `AuthGuard` protects every route except `/login`.
 
-Each user row carries `givingBalance` and `givingMonth` (YYYY-MM, **Asia/Manila** local time). Every time a user attempts to give recognition (or fetches their profile), the service checks: if `givingMonth != currentMonth("Asia/Manila")`, set `givingBalance := DEFAULT_ALLOWANCE` (configured to **30**) and `givingMonth := currentMonth("Asia/Manila")`, then proceed. No scheduler, no nightly job.
+- **No passwords anywhere**: no BCrypt, no `password_hash` column, no password reset flow.
+- **Alternative considered**: email/password with BCrypt + pre-seeded users. Rejected — the user explicitly wants "no filling up anything"; Google Sign-In is the natural fit at Synacy where every employee has a Google Workspace account.
+- **Alternative considered**: a single fixed `hd` (hosted-domain) hint on the Google button. Rejected because the allowlist is multi-domain (`synacy.com` and `rise.com`); `hd` only accepts one value. The button is rendered without `hd`, and domain enforcement is done server-side after token verification.
+- **Trade-off**: a leaked Google account = full app access for that user. We rely on Google's own MFA / session management. Mitigation: short JWT TTL (`app.jwt.expires-minutes`); on suspected compromise, rotate the JWT secret to invalidate all existing app tokens.
 
-- **Alternative considered**: a scheduled Spring `@Scheduled` task on the 1st of each month that rewrites every user row. Rejected because lazy refresh has equivalent behaviour, naturally handles users who don't log in for a month, and avoids a write storm at midnight on the 1st (which would risk hitting Sheets quotas).
-- **Time zone rationale**: Asia/Manila chosen because Synacy is in PH — users expect the allowance to refresh when *their* calendar flips to the 1st, not at 08:00 local on the 1st (which is what UTC midnight would give them). Java code SHOULD use `ZoneId.of("Asia/Manila")` rather than the server default zone, so behaviour is identical regardless of where the JVM runs.
+### 6. Monthly allowance refresh: lazy
 
-### 6. Concurrency: serialize writes
+Each user row carries `giving_balance` and `giving_month` (YYYY-MM, **Asia/Manila** local time). Every time a user attempts to give recognition (or fetches their profile), the service checks: if `giving_month != currentMonth("Asia/Manila")`, set `giving_balance := DEFAULT_ALLOWANCE` (configured to **30**) and `giving_month := currentMonth("Asia/Manila")`, then proceed. The mutation happens inside the same `@Transactional` boundary as the rest of the request. No scheduler, no nightly job.
 
-Google Sheets has no transactions. To prevent races (two simultaneous "give" actions mis-incrementing a balance), all writes go through a single-threaded `ExecutorService` in the Spring Boot service. Reads can run concurrently. Each write task is small (read affected rows → mutate → write back) and serialized.
+- **Alternative considered**: a scheduled Spring `@Scheduled` task on the 1st of each month that rewrites every user row. Rejected because lazy refresh has equivalent behaviour, naturally handles users who don't log in for a month, and avoids a write spike at midnight on the 1st.
+- **Time zone rationale**: Asia/Manila chosen because Synacy is in PH — users expect the allowance to refresh when *their* calendar flips to the 1st, not at 08:00 local on the 1st (which is what UTC midnight would give them). Java code MUST use `ZoneId.of("Asia/Manila")` rather than the server default zone, so behaviour is identical regardless of where the JVM runs.
 
-- **Alternative considered**: optimistic concurrency via a `rowVersion` column. Rejected — overkill for <100 users with low concurrency, and would require retry logic on every write.
-- **Trade-off**: the API becomes single-instance. We cannot horizontally scale the Spring Boot service. That is acceptable for a hackathon demo.
+### 7. Concurrency: DB transactions, no app-level executor
 
-### 7. Frontend state: signals + per-domain services
+Every multi-step write (give recognition, redeem reward) is wrapped in `@Transactional`. Postgres holds row-level locks for the duration of the transaction, so a partial state is never visible: either every INSERT/UPDATE commits, or all of them roll back. Default isolation (`READ_COMMITTED`) is sufficient for our scope.
+
+- **Optimistic locking on `users`**: each user row has an `@Version` column (`row_version INT NOT NULL DEFAULT 0`). If two concurrent transactions both load the same user, both mutate the balance, and both try to commit, Hibernate raises an `OptimisticLockException` on the slower one. The service catches it and translates it to HTTP 409 `"conflicting concurrent update — please retry"`. This prevents the read-modify-write race where two simultaneous gives could double-deduct from the same allowance.
+- **Alternative considered**: single-threaded `ExecutorService` (the original Sheets-era design). Removed — Postgres transactions + `@Version` give the same guarantee with proper horizontal scalability.
+- **Alternative considered**: pessimistic `SELECT … FOR UPDATE`. Held in reserve — not needed at hackathon scale, and `@Version` is cheaper at low contention.
+
+### 8. No app-level cache
+
+There is no longer a 60-second TTL cache for users or rewards. Postgres + an in-process connection pool is fast enough that the per-request reads from `users` (for the feed's name resolution) and `rewards` (for the catalog) are negligible. Removing the cache also removes a class of bugs (stale reads) and removes the need for cache invalidation around writes.
+
+### 9. Frontend state: signals + per-domain services
 
 Angular is zoneless, so we use signals for component state. Each domain has a service (`AuthService`, `RecognitionService`, `RewardsService`) that owns its signals and HTTP calls. No NgRx, no Akita — overkill for the scope.
 
-### 8. Caching
+### 10. Hashtags / company values
 
-Spring Boot keeps in-memory caches with a ~60s TTL for `users` (excluding `passwordHash`) and `rewards`, both of which churn slowly. Recognitions and redemptions are not cached (they grow append-only and the feed always wants fresh data; we will paginate at the API instead).
+For MVP, the list of allowed hashtags is a configuration property in `application.yml` (e.g., `app.hashtags: [teamwork, ownership, impact, kindness]`). The give-recognition endpoint validates that submitted hashtags are in this list. A future iteration can move this to a `company_values` table if admins need to edit it without redeploying.
 
-### 9. Hashtags / company values
+### 11. Multi-recipient recognitions = N rows
 
-For MVP, the list of allowed hashtags is a configuration property in `application.yml` (e.g., `app.hashtags: [teamwork, ownership, impact, kindness]`). The give-recognition endpoint validates that submitted hashtags are in this list. A future iteration can move this to a `values` tab if admins need to edit it without redeploying.
-
-### 10. Multi-recipient recognitions = N rows
-
-A recognition addressed to N recipients is stored as N separate rows in the `recognitions` sheet — one per `(giver, recipient)` pair — each with its own UUID. All rows share the same `message`, `hashtags`, and `createdAt`. The per-recipient `amount` is the same on every row. The giver's allowance is debited by `amount × N` in a single update.
+A recognition addressed to N recipients is stored as N separate rows in the `recognitions` table — one per `(giver, recipient)` pair — each with its own UUID. All rows share the same `message`, `hashtags`, and `created_at`. The per-recipient `amount` is the same on every row. The giver's allowance is debited by `amount × N` in a single update inside the same transaction.
 
 - **Alternative considered**: a single row with a comma-separated recipient list. Rejected because the feed would then need post-processing on every read, balance accounting would parse strings on the hot path, and rows would not be self-contained.
-- **Trade-off**: the feed shows N items for one logical "give" action. That mirrors Bonusly's behaviour and avoids special-casing in the feed renderer. If grouping is desired later, the shared `createdAt` + identical `message` are enough of a key to fold them client-side.
-- **Atomicity**: the entire multi-recipient give is processed in one task on the write executor (decision 6) — validate everything first, then append all N rows and credit all N recipients, then debit the giver once. A partial-write failure is logged with all affected ids for manual reconciliation.
+- **Trade-off**: the feed shows N items for one logical "give" action. That mirrors Bonusly's behaviour and avoids special-casing in the feed renderer. If grouping is desired later, the shared `created_at` + identical `message` are enough of a key to fold them client-side.
+- **Atomicity**: the entire multi-recipient give runs inside one `@Transactional` method — validate everything first, then INSERT all N recognition rows, credit all N recipients, debit the giver once. If any step throws, the whole transaction rolls back.
 
 ## Risks / Trade-offs
 
-- **Sheets API quotas (60 reads/min and 60 writes/min per project per user)** → cache reads aggressively (decision 8), serialize writes (decision 6), and surface a clear "please retry" error to the client on rate-limit. Worst case: instruct the demo audience to slow down.
-- **No transactions on Sheets** → write serialization mitigates intra-process races; cross-process is not a concern because we run a single instance (decision 6).
-- **Service-account credential leakage** → keep credential in env var, never commit it, rotate after the hackathon.
-- **JWT secret leakage** → same handling as the service-account credential. There is no token-revocation list in MVP; on suspected leak, rotate the secret (which invalidates every issued token).
-- **Sheets row-number drift** → never delete rows; identify entities only by UUID.
-- **Quota or Sheets outage** → the entire app is unavailable. Acceptable for a demo; documented as a known limit.
+- **Read-modify-write races on `users.giving_balance` / `earned_balance`** → mitigated by `@Version` optimistic locking (decision 7). HTTP 409 surfaces to the client with a "please retry" message; the user re-submits.
+- **Connection pool exhaustion** → default HikariCP settings are fine for the demo (10 connections). If we move to higher concurrency, revisit pool sizing alongside `@Transactional` boundary scope.
+- **JWT secret leakage** → keep secret in env var, never commit it. There is no token-revocation list in MVP; on suspected leak, rotate the secret (invalidates every issued token).
 - **Hashtag enum drift** → if admins want to add a value, they need a backend deploy. Acceptable for MVP; revisit if it becomes painful.
+- **Flyway migration mistakes** → never edit an applied migration. Add a new `V<n+1>__fix.sql`. If a migration breaks on startup, the app fails to start (correct behaviour — refuses to run on an unknown schema).
+- **Dev/prod parity** → the compose Postgres is the same major version as we'd run in prod. Both use the same Flyway scripts. Migrations are tested against the same image they'll run against in production.
 
 ## Migration Plan
 
-Not applicable — greenfield. To make a future move off Sheets cheap, the persistence layer lives behind Java repository interfaces (`UserRepository`, `RecognitionRepository`, `RewardRepository`, `RedemptionRepository`). The Sheets-backed implementations are the only concrete classes in this proposal; a JPA implementation can replace them later without touching the service layer.
+Greenfield — there is no pre-existing data to migrate. The repo's `docker-compose.yml` brings up a fresh Postgres instance; the first `./mvnw spring-boot:run` applies `V1__init.sql` (schema) and `V2__seed_rewards.sql` (demo reward rows) automatically. To "reset" the demo, run `docker compose down -v` to drop the volume and start over.
 
 ## Resolved Questions
 
 - **Default monthly allowance amount: `30` points per user.** Lower than Bonusly's typical 100 — keeps each give meaningful at the hackathon's smaller scale and surfaces "insufficient balance" and multi-recipient cost math during demos. Stored in `application.yml` under `app.allowance.default-points` so it can be raised without a code change.
 - **Hashtag list at launch: `teamwork`, `ownership`, `impact`, `kindness`.** Placeholder values for the demo. Stored in `application.yml` under `app.hashtags`; swapping in Synacy's actual company values is a config edit, not a code change.
-- **Reward inventory: unlimited per reward.** A reward is purchasable as long as `active = true` — no stock column on the `rewards` sheet, no decrement on redemption. If physical-item rewards are added later, an `inventory` column can be introduced without breaking existing reward rows.
+- **Reward inventory: unlimited per reward.** A reward is purchasable as long as `active = true` — no stock column on the `rewards` table, no decrement on redemption. If physical-item rewards are added later, an `inventory` column can be introduced via a new Flyway migration without breaking existing reward rows.
 - **Month rollover time zone: `Asia/Manila` (UTC+8).** The allowance refreshes when the user's *local* calendar flips to the 1st. All "current month" comparisons in the Spring Boot service MUST use `ZoneId.of("Asia/Manila")`, not the JVM default zone, so behaviour is independent of where the service runs.
+- **Persistence: PostgreSQL 16 + Spring Data JPA + Flyway.** Reverses the original Sheets-as-DB decision. Local Postgres comes from `docker-compose.yml`; production would point at a managed instance via env vars.

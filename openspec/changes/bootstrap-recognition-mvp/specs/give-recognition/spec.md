@@ -82,19 +82,24 @@ The system SHALL reject recognitions whose recipient list is empty, whose recipi
 
 ### Requirement: Recognition write is all-or-nothing
 
-Because Google Sheets has no transactions, the system SHALL serialize recognition writes through a single-threaded executor and SHALL ensure that ALL validation occurs BEFORE the first sheet write. For a multi-recipient recognition the system MUST either successfully append all `N` recognition rows AND debit the giver once AND credit every recipient, or fail without having modified any balance or appended any row. If any sheet write fails mid-sequence, the system MUST log the partial state for manual reconciliation rather than silently swallowing the error.
+The system SHALL execute the entire give operation — validation, recognition row INSERTs, recipient balance UPDATEs, and the giver balance UPDATE — inside a single database transaction. If any step throws, the transaction MUST roll back so that no row is inserted and no balance is modified. The transaction MUST detect concurrent writes to the giver's row using optimistic locking (a `@Version` column) and reject the slower transaction with HTTP 409 `"conflicting concurrent update — please retry"` rather than silently overwriting the other transaction's debit.
 
 #### Scenario: Validation precedes any write
 
 - **WHEN** a recognition request fails any validation rule
-- **THEN** no rows in `users` or `recognitions` are modified
+- **THEN** no rows in `users` or `recognitions` are modified (the transaction never reaches the first INSERT)
 
-#### Scenario: Partial write failure is logged
+#### Scenario: Mid-transaction failure rolls back cleanly
 
-- **WHEN** some recognition rows are appended successfully but a subsequent balance update fails (e.g., Sheets API outage mid-sequence)
-- **THEN** the system logs an ERROR including the giver id, the full recipient id list, the per-recipient amount, every recognition id that was appended, and the failure cause, so an operator can manually reconcile the affected rows
+- **WHEN** the database raises an exception part-way through the give sequence (e.g., a foreign-key violation, a check-constraint failure, or a connection drop)
+- **THEN** the transaction rolls back leaving no recognition rows and no balance changes; the system logs an ERROR with the giver id, the full recipient id list, the per-recipient amount, and the failure cause; and the response is HTTP 500 with a generic message
 
-#### Scenario: Multi-recipient sequence is processed in a single executor task
+#### Scenario: Concurrent givers race on the same balance
+
+- **WHEN** two transactions both load the same giver's row with `givingBalance = 30` and both attempt to debit 25 (so both would succeed independently)
+- **THEN** the transaction that commits first succeeds; the other transaction sees an `OptimisticLockException` on commit and is rejected with HTTP 409 `"conflicting concurrent update — please retry"`; neither transaction overwrites the other's debit silently
+
+#### Scenario: Multi-recipient sequence is one transaction
 
 - **WHEN** an authenticated user POSTs a multi-recipient recognition
-- **THEN** the system processes the entire validation-append-credit-debit sequence inside a single task on the write executor, so concurrent giver actions cannot observe a half-applied state
+- **THEN** the entire validation-INSERT-credit-debit sequence executes inside a single `@Transactional` boundary, so other transactions never observe a half-applied state
