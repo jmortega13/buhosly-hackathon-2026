@@ -83,6 +83,14 @@ Spring Boot keeps in-memory caches with a ~60s TTL for `users` (excluding `passw
 
 For MVP, the list of allowed hashtags is a configuration property in `application.yml` (e.g., `app.hashtags: [teamwork, ownership, impact, kindness]`). The give-recognition endpoint validates that submitted hashtags are in this list. A future iteration can move this to a `values` tab if admins need to edit it without redeploying.
 
+### 10. Multi-recipient recognitions = N rows
+
+A recognition addressed to N recipients is stored as N separate rows in the `recognitions` sheet — one per `(giver, recipient)` pair — each with its own UUID. All rows share the same `message`, `hashtags`, and `createdAt`. The per-recipient `amount` is the same on every row. The giver's allowance is debited by `amount × N` in a single update.
+
+- **Alternative considered**: a single row with a comma-separated recipient list. Rejected because the feed would then need post-processing on every read, balance accounting would parse strings on the hot path, and rows would not be self-contained.
+- **Trade-off**: the feed shows N items for one logical "give" action. That mirrors Bonusly's behaviour and avoids special-casing in the feed renderer. If grouping is desired later, the shared `createdAt` + identical `message` are enough of a key to fold them client-side.
+- **Atomicity**: the entire multi-recipient give is processed in one task on the write executor (decision 6) — validate everything first, then append all N rows and credit all N recipients, then debit the giver once. A partial-write failure is logged with all affected ids for manual reconciliation.
+
 ## Risks / Trade-offs
 
 - **Sheets API quotas (60 reads/min and 60 writes/min per project per user)** → cache reads aggressively (decision 8), serialize writes (decision 6), and surface a clear "please retry" error to the client on rate-limit. Worst case: instruct the demo audience to slow down.

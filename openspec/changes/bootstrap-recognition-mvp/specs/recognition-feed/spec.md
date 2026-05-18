@@ -35,9 +35,9 @@ The feed endpoint SHALL support page-based reads to avoid loading the entire `re
 
 ### Requirement: Display fields
 
-Each recognition in the feed response SHALL include the recognition id, giver (id and display name), recipient (id and display name), amount, message, hashtags, and `createdAt` timestamp. The response MUST NOT include any internal Sheets row indices or service-account details.
+Each recognition in the feed response SHALL include the giver (id and display name), recipient (id and display name), amount, message, hashtags, and `createdAt` timestamp. The response MUST NOT include the recognition's own `id`, internal Sheets row indices, or service-account details. (Giver and recipient ids remain in the response so the client can link to user profiles; only the recognition row id is suppressed.)
 
 #### Scenario: Recognition shape
 
 - **WHEN** an authenticated user retrieves the feed
-- **THEN** each item in the response contains exactly: `id`, `giver` (with `id`, `name`), `recipient` (with `id`, `name`), `amount`, `message`, `hashtags` (array), and `createdAt` (ISO-8601 UTC)
+- **THEN** each item in the response contains exactly: `giver` (with `id`, `name`), `recipient` (with `id`, `name`), `amount`, `message`, `hashtags` (array), and `createdAt` (ISO-8601 UTC) — and does NOT contain a top-level `id` field

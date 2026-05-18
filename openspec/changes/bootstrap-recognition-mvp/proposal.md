@@ -6,7 +6,7 @@ Synacy needs an internal peer-recognition tool so teammates can publicly appreci
 
 - Add user authentication so each Synacy employee has an identity, a giving balance, and an earned balance.
 - Add a monthly **giving allowance** that refreshes on the 1st of each month; unused allowance expires (it does not roll over).
-- Add the ability to **give recognition**: pick a recipient, attach an amount (within remaining allowance), a free-text message, and at least one `#hashtag` mapped to a company value.
+- Add the ability to **give recognition**: pick **one or more recipients**, attach a per-recipient amount, a free-text message, and at least one `#hashtag` mapped to a company value. Each recipient receives the full `amount`; the giver's allowance is debited by `amount × number of recipients`, which must fit within the giver's remaining monthly allowance.
 - Add a chronological **public recognition feed** showing every recognition with giver, recipient, amount, message, and hashtags.
 - Add an **earned balance** that accumulates points received and is separate from the giving allowance (earned points do not expire).
 - Add a **rewards catalog** with a fixed set of redeemable items and a redemption action that deducts from the earned balance.
