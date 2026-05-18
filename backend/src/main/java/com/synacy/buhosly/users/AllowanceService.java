@@ -23,7 +23,10 @@ public class AllowanceService {
         if (user.givingMonth() != null && user.givingMonth().equals(currentMonth)) {
             return user;
         }
-        user.setGivingBalance(props.allowance().defaultPoints());
+        int amount = user.monthlyAllowance() != null
+                ? user.monthlyAllowance()
+                : props.allowance().defaultPoints();
+        user.setGivingBalance(amount);
         user.setGivingMonth(currentMonth);
         return users.save(user);
     }

@@ -34,6 +34,9 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "monthly_allowance")
+    private Integer monthlyAllowance;
+
     @Version
     @Column(name = "row_version", nullable = false)
     private int rowVersion;
@@ -85,6 +88,10 @@ public class User {
         return createdAt;
     }
 
+    public Integer monthlyAllowance() {
+        return monthlyAllowance;
+    }
+
     public int rowVersion() {
         return rowVersion;
     }
@@ -99,5 +106,9 @@ public class User {
 
     public void setEarnedBalance(int earnedBalance) {
         this.earnedBalance = earnedBalance;
+    }
+
+    public void setMonthlyAllowance(Integer monthlyAllowance) {
+        this.monthlyAllowance = monthlyAllowance;
     }
 }

@@ -7,11 +7,14 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -45,8 +48,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
         var token = header.substring(BEARER.length());
         try {
-            var userId = jwt.verifyAndGetUserId(token);
-            var auth = new UsernamePasswordAuthenticationToken(userId, null, List.of());
+            var claims = jwt.verify(token);
+            List<GrantedAuthority> authorities = new ArrayList<>();
+            if (claims.isAdmin()) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            }
+            var auth = new UsernamePasswordAuthenticationToken(claims.userId(), null, authorities);
             SecurityContextHolder.getContext().setAuthentication(auth);
             chain.doFilter(request, response);
         } catch (ApiException e) {

@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -51,11 +52,14 @@ public class AuthController {
             throw ApiException.forbidden("domain not allowed");
         }
         User user = users.findByEmailIgnoreCase(verified.email()).orElseGet(() -> jitCreate(verified));
-        var token = jwt.issue(user.id().toString());
-        return ResponseEntity.ok(new LoginResponse(token, Map.of(
-                "id", user.id().toString(),
-                "email", user.email(),
-                "name", user.name())));
+        boolean isAdmin = isAdminEmail(user.email());
+        var token = jwt.issue(user.id().toString(), isAdmin);
+        var profile = new LinkedHashMap<String, Object>();
+        profile.put("id", user.id().toString());
+        profile.put("email", user.email());
+        profile.put("name", user.name());
+        profile.put("isAdmin", isAdmin);
+        return ResponseEntity.ok(new LoginResponse(token, profile));
     }
 
     private boolean domainAllowed(String email) {
@@ -67,6 +71,16 @@ public class AuthController {
             allowed.add(d.toLowerCase());
         }
         return allowed.contains(domain);
+    }
+
+    private boolean isAdminEmail(String email) {
+        var adminList = props.auth().adminEmails();
+        if (adminList == null) return false;
+        var lower = email.toLowerCase();
+        for (var a : adminList) {
+            if (a != null && a.equalsIgnoreCase(lower)) return true;
+        }
+        return false;
     }
 
     private User jitCreate(GoogleTokenVerifierService.Verified v) {
@@ -83,5 +97,5 @@ public class AuthController {
 
     public record GoogleSignInRequest(@NotBlank String idToken) {}
 
-    public record LoginResponse(String token, Map<String, String> user) {}
+    public record LoginResponse(String token, Map<String, Object> user) {}
 }

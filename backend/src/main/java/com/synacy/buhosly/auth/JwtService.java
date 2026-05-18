@@ -1,6 +1,7 @@
 package com.synacy.buhosly.auth;
 
 import com.synacy.buhosly.config.AppProperties;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -27,22 +28,28 @@ public class JwtService {
         this.expires = Duration.ofMinutes(props.jwt().expiresMinutes());
     }
 
-    public String issue(String userId) {
+    public String issue(String userId, boolean isAdmin) {
         var now = Instant.now();
         return Jwts.builder()
                 .subject(userId)
+                .claim("admin", isAdmin)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(expires)))
                 .signWith(key)
                 .compact();
     }
 
-    public String verifyAndGetUserId(String token) {
+    public VerifiedClaims verify(String token) {
         try {
-            return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload().getSubject();
+            Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+            var subject = claims.getSubject();
+            Boolean admin = claims.get("admin", Boolean.class);
+            return new VerifiedClaims(subject, admin != null && admin);
         } catch (JwtException | IllegalArgumentException e) {
             throw new com.synacy.buhosly.common.ApiException(
                     org.springframework.http.HttpStatus.UNAUTHORIZED, "invalid token");
         }
     }
+
+    public record VerifiedClaims(String userId, boolean isAdmin) {}
 }

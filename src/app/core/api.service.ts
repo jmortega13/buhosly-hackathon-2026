@@ -4,6 +4,9 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../environments/environment';
 import {
+  AdminRedemptionRow,
+  AdminRewardRow,
+  AdminUserRow,
   FeedPage,
   GifResult,
   GiveRequest,
@@ -58,5 +61,57 @@ export class ApiService {
   gifs(q: string): Observable<GifResult[]> {
     const params = new HttpParams().set('q', q);
     return this.http.get<GifResult[]>(`${this.base}/gifs`, { params });
+  }
+
+  // ----- admin -----
+
+  adminUsers(): Observable<AdminUserRow[]> {
+    return this.http.get<AdminUserRow[]>(`${this.base}/admin/users`);
+  }
+
+  adminTopUp(userId: string, amount: number): Observable<AdminUserRow> {
+    return this.http.post<AdminUserRow>(`${this.base}/admin/users/${userId}/top-up`, { amount });
+  }
+
+  adminSetMonthlyAllowance(userId: string, monthlyAllowance: number | null): Observable<AdminUserRow> {
+    return this.http.put<AdminUserRow>(
+      `${this.base}/admin/users/${userId}/monthly-allowance`,
+      { monthlyAllowance }
+    );
+  }
+
+  adminRewards(): Observable<AdminRewardRow[]> {
+    return this.http.get<AdminRewardRow[]>(`${this.base}/admin/rewards`);
+  }
+
+  adminCreateReward(body: {
+    name: string;
+    description: string;
+    costPoints: number;
+    imageUrl: string;
+  }): Observable<AdminRewardRow> {
+    return this.http.post<AdminRewardRow>(`${this.base}/admin/rewards`, body);
+  }
+
+  adminUpdateReward(id: string, body: {
+    name: string;
+    description: string;
+    costPoints: number;
+    imageUrl: string;
+    active: boolean;
+  }): Observable<AdminRewardRow> {
+    return this.http.put<AdminRewardRow>(`${this.base}/admin/rewards/${id}`, body);
+  }
+
+  adminDeleteReward(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/admin/rewards/${id}`);
+  }
+
+  adminRedemptions(): Observable<AdminRedemptionRow[]> {
+    return this.http.get<AdminRedemptionRow[]>(`${this.base}/admin/redemptions`);
+  }
+
+  adminRedemptionsCsv(): Observable<Blob> {
+    return this.http.get(`${this.base}/admin/redemptions.csv`, { responseType: 'blob' });
   }
 }

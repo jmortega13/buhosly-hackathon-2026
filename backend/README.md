@@ -33,6 +33,16 @@ You need **one required** + **one optional** external API key (both one-time):
 
 If `GIPHY_API_KEY` is empty, the emoji picker still works; the GIF panel returns HTTP 503 "gif search is not configured on the server" and shows that message in the UI.
 
+### Admin email allowlist (optional — gates the admin dashboard)
+
+Users whose verified Google email appears in `ADMIN_EMAILS` (comma-separated, no spaces) gain access to `/admin/*` routes in the SPA and every `/api/v1/admin/**` endpoint on the backend. Add or remove entries by editing `backend/.env` and restarting the backend; **users already signed in will need to sign out and back in** so their new JWT carries the admin claim.
+
+```
+ADMIN_EMAILS=manuel.ortega@synacy.com,another.admin@synacy.com
+```
+
+If `ADMIN_EMAILS` is empty, there are no admins and every admin endpoint returns HTTP 403.
+
 No Postgres install is required on the host — it runs in Docker via the repo-root `docker-compose.yml`.
 
 ## Run
@@ -123,6 +133,8 @@ A clean `docker compose up -d` followed by `./gradlew bootRun` applies five Flyw
 | `V4__seed_test_users.sql` | 5 demo users at `@buhosly.demo` (Maria Cruz, Juan Reyes, Anna Garcia, Carlo Santos, Bea Mendoza) with varied balances |
 | `V5__more_hashtags.sql` | 10 additional hashtag suggestions (`collaboration`, `mentorship`, `innovation`, `leadership`, `helpful`, `growth`, `customer-love`, `above-and-beyond`, `problem-solving`, `craftsmanship`) |
 | `V6__add_gif_url.sql` | Adds nullable `gif_url VARCHAR(2048)` column to `recognitions` for the optional GIF attachment |
+| `V7__set_reward_images.sql` | Backfills `image_url` on the four V2-seeded rewards using stable Unsplash CDN URLs |
+| `V8__admin_overrides.sql` | Adds nullable `monthly_allowance INTEGER` column to `users` for the per-user persistent allowance override |
 
 The demo users **cannot sign in** — their email domain `@buhosly.demo` isn't on the `app.auth.allowed-domains` list. They exist purely as `@`-mention targets so the dropdown isn't empty in a fresh database. When you're ready to ship to a real environment, delete `V4__seed_test_users.sql` (or use a separate Flyway location for dev seeds — out of scope for the hackathon).
 
@@ -152,6 +164,15 @@ The demo users **cannot sign in** — their email domain `@buhosly.demo` isn't o
 | GET    | `/api/v1/redemptions/me`      | JWT  | caller's redemption history                                                    |
 | GET    | `/api/v1/hashtags?q=`         | JWT  | hashtag suggestions, ordered by usage_count desc                               |
 | GET    | `/api/v1/gifs?q=`             | JWT  | Giphy-proxied GIF search; returns `[{id, previewUrl, gifUrl, alt}]`            |
+| GET    | `/api/v1/admin/users`         | Admin| All users with balances + monthly allowance override                            |
+| POST   | `/api/v1/admin/users/{id}/top-up` | Admin| `{amount}` — add to current-month giving balance                          |
+| PUT    | `/api/v1/admin/users/{id}/monthly-allowance` | Admin | `{monthlyAllowance}` — set/clear persistent override          |
+| GET    | `/api/v1/admin/rewards`       | Admin| All rewards (incl. inactive)                                                    |
+| POST   | `/api/v1/admin/rewards`       | Admin| Create reward                                                                   |
+| PUT    | `/api/v1/admin/rewards/{id}`  | Admin| Update reward                                                                   |
+| DELETE | `/api/v1/admin/rewards/{id}`  | Admin| Soft-delete (active=false)                                                      |
+| GET    | `/api/v1/admin/redemptions`   | Admin| All redemptions with joined user + reward names                                 |
+| GET    | `/api/v1/admin/redemptions.csv` | Admin | Same data, RFC-4180 CSV download (import into Google Sheets)                |
 
 ## Inspecting Postgres locally
 

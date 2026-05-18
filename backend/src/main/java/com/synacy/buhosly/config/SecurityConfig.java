@@ -1,7 +1,10 @@
 package com.synacy.buhosly.config;
 
 import com.synacy.buhosly.auth.JwtAuthFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,13 +29,21 @@ public class SecurityConfig {
         var corsSource = new UrlBasedCorsConfigurationSource();
         corsSource.registerCorsConfiguration("/**", corsConfig);
 
+        var mapper = new ObjectMapper();
         return http.cors(c -> c.configurationSource(corsSource))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/v1/auth/**")
                         .permitAll()
+                        .requestMatchers("/api/v1/admin/**")
+                        .hasRole("ADMIN")
                         .anyRequest()
                         .authenticated())
+                .exceptionHandling(eh -> eh.accessDeniedHandler((req, res, ex) -> {
+                    res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    res.setContentType("application/json");
+                    mapper.writeValue(res.getWriter(), Map.of("message", "admin only"));
+                }))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }

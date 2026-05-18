@@ -2,12 +2,43 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  isAdmin?: boolean;
 }
 
 export interface MeProfile extends AuthUser {
   givingBalance: number;
   givingMonth: string;
   earnedBalance: number;
+  monthlyAllowance: number | null;
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  givingBalance: number;
+  givingMonth: string;
+  earnedBalance: number;
+  monthlyAllowance: number | null;
+  createdAt: string;
+}
+
+export interface AdminRewardRow {
+  id: string;
+  name: string;
+  description: string;
+  costPoints: number;
+  imageUrl: string;
+  active: boolean;
+}
+
+export interface AdminRedemptionRow {
+  id: string;
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+  reward: { id: string; name: string };
+  costPoints: number;
+  status: string;
 }
 
 export interface UserBrief {

@@ -12,6 +12,7 @@ Synacy needs an internal peer-recognition tool so teammates can publicly appreci
 - Add an **earned balance** that accumulates points received and is separate from the giving allowance (earned points do not expire).
 - Add a **rewards catalog** with a fixed set of redeemable items and a redemption action that deducts from the earned balance.
 - Persist all of the above through a Spring Boot API backed by **PostgreSQL 16** via Spring Data JPA, with Flyway-managed schema migrations. One table per entity (`users`, `recognitions`, `rewards`, `redemptions`). Local Postgres runs via `docker-compose.yml` at the repo root.
+- Add an **admin dashboard** for users whose email appears in the `app.auth.admin-emails` allowlist. Admins can manage the rewards catalog (create, edit, soft-delete), top up an individual user's giving balance for the current month, set a persistent per-user monthly allowance override that takes effect on the next month rollover, browse every redemption across the org, and export the redemption list as CSV (importable into Google Sheets via File → Import). Non-admins receive HTTP 403 on every `/api/v1/admin/**` endpoint.
 
 Out of scope for this proposal: Slack/Teams integrations, add-on/pile-on points, comments, admin analytics, HRIS sync, email notifications, and audit/export tooling. (Password reset is not applicable — there are no passwords.)
 
@@ -26,6 +27,7 @@ Out of scope for this proposal: Slack/Teams integrations, add-on/pile-on points,
 - `rewards-catalog`: Listing of available rewards and the redemption flow that debits the earned balance and records a redemption.
 - `hashtag-suggestions`: A persistent set of hashtags that grows whenever any user uses a tag in a recognition, exposed via an API the composer uses to drive its `#` typeahead.
 - `gif-search`: A server-proxied GIF search powered by the Giphy API. The composer hits a backend endpoint with a query string; the backend forwards to Giphy using a server-side API key and returns a slim `{id, previewUrl, gifUrl, alt}` shape.
+- `admin-dashboard`: An admin-only surface (gated by an `app.auth.admin-emails` allowlist) for managing the rewards catalog, adjusting individual users' allowances, viewing every redemption, and exporting the redemption list as CSV.
 
 ### Modified Capabilities
 

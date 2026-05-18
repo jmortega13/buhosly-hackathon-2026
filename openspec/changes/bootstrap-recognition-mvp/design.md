@@ -117,7 +117,25 @@ A **live preview bar** below the textarea renders the parsed structure as chips 
 - **Mention resolution**: typing `@alicecruz` manually (without picking from the dropdown) does NOT count as a valid mention — the composer needs the dropdown selection to know the UUID. Submit is disabled with the message "unresolved mention". Picking from the dropdown is the only path to a valid give.
 - **Single mount point**: the composer is embedded at the top of `/feed`. There is no separate `/give` route — the feed page is the give surface.
 
-### 12. Emoji + GIF attachments
+### 12. Admin role + dashboard
+
+Admins are identified by an **email allowlist in config** (`app.auth.admin-emails`), not by a per-user database flag. No schema change for the role itself; promoting/demoting an admin is a config edit + service restart.
+
+The login flow (`POST /api/v1/auth/google`) compares the verified Google email against the allowlist; if matched, the issued JWT carries an `admin: true` claim. `JwtAuthFilter` reads the claim and adds `ROLE_ADMIN` to the request's `SecurityContext`. `SecurityFilterChain` declares `.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")` so Spring Security enforces the gate at the framework level — no inline `if (admin)` check needed in each controller.
+
+The `/me` and login responses include a `isAdmin: boolean` so the Angular `AuthService` can show/hide the admin nav without an extra round-trip.
+
+- **Trade-off**: a token issued before an admin is added to the allowlist won't have `admin: true`. The admin needs to sign out and back in once. Acceptable because tokens are short-lived (12 hours).
+- **Schema impact**: one new nullable column on `users`: `monthly_allowance INTEGER NULL` (Flyway `V8__admin_overrides.sql`). NULL = "use `app.allowance.default-points`"; non-null = "use this value on every future monthly refresh".
+- **Endpoint surface** (all under `/api/v1/admin/`):
+  - `GET /rewards`, `POST /rewards`, `PUT /rewards/{id}`, `DELETE /rewards/{id}` — full CRUD with soft delete via `active = false`. Hard delete is forbidden because existing redemptions reference rewards by id.
+  - `GET /users` — every user with both balances and the override.
+  - `POST /users/{id}/top-up {amount}` — adds to current-month `giving_balance` after applying the lazy monthly refresh first (so a stale-month user isn't accidentally double-credited).
+  - `PUT /users/{id}/monthly-allowance {monthlyAllowance}` — sets the persistent override; doesn't touch the current month.
+  - `GET /redemptions` — org-wide list with joined user + reward names.
+  - `GET /redemptions.csv` — RFC 4180 CSV, `Content-Disposition: attachment` so browsers download it.
+
+### 13. Emoji + GIF attachments
 
 The composer offers two attachment buttons next to the textarea:
 
@@ -132,7 +150,7 @@ Schema impact: a new nullable `gif_url VARCHAR(2048)` column on `recognitions` (
 - **Alternative considered**: hand-rolled emoji palette of ~50 common emojis. Rejected at the user's direction — `emoji-picker-element` gives the full Unicode set with categories and search for ~70 KB gzipped.
 - **Storage choice**: GIF stored as a URL (Giphy-hosted), not as a binary blob in our DB. We never download the GIF itself; the browser fetches directly from Giphy's CDN at render time.
 
-### 13. Multi-recipient recognitions = N rows
+### 14. Multi-recipient recognitions = N rows
 
 A recognition addressed to N recipients is stored as N separate rows in the `recognitions` table — one per `(giver, recipient)` pair — each with its own UUID. All rows share the same `message`, `hashtags`, and `created_at`. The per-recipient `amount` is the same on every row. The giver's allowance is debited by `amount × N` in a single update inside the same transaction.
 

@@ -11,7 +11,7 @@ public record AppProperties(
 
     public record Jwt(String secret, long expiresMinutes) {}
 
-    public record Auth(List<String> allowedDomains, Google google) {
+    public record Auth(List<String> allowedDomains, List<String> adminEmails, Google google) {
         public record Google(String clientId) {}
     }
 

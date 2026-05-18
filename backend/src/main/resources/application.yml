@@ -36,6 +36,7 @@ app:
     allowed-domains:
       - synacy.com
       - rise.com
+    admin-emails: ${ADMIN_EMAILS:}
     google:
       client-id: ${GOOGLE_CLIENT_ID:}
 

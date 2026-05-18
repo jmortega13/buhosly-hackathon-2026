@@ -26,6 +26,7 @@ class AllowanceServiceTest {
             new AppProperties.Jwt("0123456789012345678901234567890123", 60),
             new AppProperties.Auth(
                     List.of("synacy.com", "rise.com"),
+                    List.of(),
                     new AppProperties.Auth.Google("client-id")),
             new AppProperties.Allowance(30, "Asia/Manila"),
             new AppProperties.Feed(25, 100),

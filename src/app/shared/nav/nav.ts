@@ -16,6 +16,9 @@ import { MeProfile } from '../../core/types';
         <a routerLink="/rewards" routerLinkActive="active">Rewards</a>
         <a routerLink="/redemptions" routerLinkActive="active">My redemptions</a>
         <a routerLink="/profile" routerLinkActive="active">Profile</a>
+        @if (auth.currentUser()?.isAdmin) {
+          <a routerLink="/admin" routerLinkActive="active" class="admin">Admin</a>
+        }
       </div>
       <div class="user">
         @if (me(); as m) {
@@ -67,6 +70,12 @@ import { MeProfile } from '../../core/types';
       .links a.active {
         background: var(--rise-pink);
         color: white;
+      }
+      .links a.admin {
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+      .links a.admin.active {
+        border-color: var(--rise-pink);
       }
       .user {
         display: flex;
