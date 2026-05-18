@@ -1,6 +1,51 @@
+/* Rise.ph palette.
+   - Pink (#ff4d6d) is the action / CTA color.
+   - The navy gradient lives on the top header only.
+   - The body and all content cards stay light. */
+:root {
+  /* Brand pink */
+  --rise-pink:        #ff4d6d;
+  --rise-pink-deep:   #e63956;
+  --rise-pink-soft:   #ffe0e6;
+  --rise-pink-tint:   #fff5f7;
+
+  /* Header gradient (used by the top nav only) */
+  --rise-header-bg:   linear-gradient(245deg, #114a85 16.44%, #00002c 83.78%);
+  --rise-navy:        #114a85;
+  --rise-navy-deep:   #00002c;
+
+  /* Body / surfaces (light) */
+  --rise-body:        #f5f7fb;
+  --rise-card:        #ffffff;
+  --rise-card-elev:   #fafbff;
+  --rise-line:        #e5e7eb;
+  --rise-line-strong: #d1d5db;
+
+  /* Type on light */
+  --rise-ink:         #111827;
+  --rise-muted:       #6b7280;
+  --rise-muted-soft:  #9ca3af;
+
+  /* Secondary accents (chip palette on light surfaces) */
+  --rise-cyan:        #1d4ed8;
+  --rise-cyan-soft:   #dbeafe;
+  --rise-purple:      #6d28d9;
+  --rise-purple-soft: #ede9fe;
+  --rise-mint:        #15803d;
+  --rise-mint-soft:   #dcfce7;
+  --rise-amber:       #92400e;
+  --rise-amber-soft:  #fef3c7;
+
+  /* Status */
+  --rise-warn:        #b45309;
+  --rise-warn-soft:   #fef3c7;
+  --rise-error:       #b91c1c;
+  --rise-error-soft:  #fee2e2;
+}
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  color: #111827;
+  color: var(--rise-ink);
 }
 
 * {
@@ -11,14 +56,15 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: #f9fafb;
   min-height: 100vh;
+  color: var(--rise-ink);
+  background: var(--rise-body);
 }
 
 h1,
 h2,
 h3 {
-  color: #111827;
+  color: var(--rise-ink);
 }
 
 button {

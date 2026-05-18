@@ -6,7 +6,8 @@ Synacy needs an internal peer-recognition tool so teammates can publicly appreci
 
 - Add user authentication via **Google Sign-In only** — no passwords, no email/password form, no self-signup form. Users sign in with their Google account; the server verifies the Google ID token and exchanges it for an application JWT. Allowed email domains: `synacy.com` and `rise.com`. First-time sign-in **just-in-time creates** a new user row using the name + email from Google; subsequent sign-ins reuse that row. Each user has an identity, a giving balance, and an earned balance.
 - Add a monthly **giving allowance** that refreshes on the 1st of each month; unused allowance expires (it does not roll over).
-- Add the ability to **give recognition**: pick **one or more recipients**, attach a per-recipient amount, a free-text message, and at least one `#hashtag` mapped to a company value. Each recipient receives the full `amount`; the giver's allowance is debited by `amount × number of recipients`, which must fit within the giver's remaining monthly allowance.
+- Add the ability to **give recognition** through a single **Bonusly-style composer** pinned at the top of the feed page: one textarea where the user types `@` to pick recipients (typeahead over org members), `+N` inline to set the per-recipient amount, and `#` to attach hashtags (typeahead over previously-used hashtags, with a "create new" option). Hashtags are **freeform** — there is no fixed allowlist; any tag a user creates becomes a suggestion for everyone else. Each recipient receives the full `amount`; the giver's allowance is debited by `amount × number of recipients`, which must fit within the giver's remaining monthly allowance.
+- Add **emoji and GIF attachments** to the composer: an emoji picker button opens a full Unicode picker (`emoji-picker-element`) and inserts the selected emoji at the caret in the textarea; a GIF picker button opens a search panel backed by the Giphy API (proxied through the backend so the API key stays server-side) and attaches the chosen GIF to the recognition. The recognition row carries an optional `gifUrl`; the feed renders the GIF below the message when present.
 - Add a chronological **public recognition feed** showing every recognition with giver, recipient, amount, message, and hashtags.
 - Add an **earned balance** that accumulates points received and is separate from the giving allowance (earned points do not expire).
 - Add a **rewards catalog** with a fixed set of redeemable items and a redemption action that deducts from the earned balance.
@@ -20,9 +21,11 @@ Out of scope for this proposal: Slack/Teams integrations, add-on/pile-on points,
 
 - `user-auth`: Identity and session management for Synacy employees, including the per-user giving allowance and earned balance fields.
 - `points-ledger`: Rules for the monthly giving allowance (refresh, expiry) and the earned balance (accumulation, deduction on redemption). Source of truth for "can this user afford this action?" checks.
-- `give-recognition`: The action of one user awarding points to another, including validation of recipient, amount, message, and at least one hashtag.
-- `recognition-feed`: Read-only, reverse-chronological public listing of all recognitions across the organization.
+- `give-recognition`: The action of one user awarding points to another via the composer (`@` mention, `+N` amount, `#` hashtag), including validation of recipients, amount, message, and at least one hashtag.
+- `recognition-feed`: Read-only, reverse-chronological public listing of all recognitions across the organization, with the give-recognition composer pinned at the top.
 - `rewards-catalog`: Listing of available rewards and the redemption flow that debits the earned balance and records a redemption.
+- `hashtag-suggestions`: A persistent set of hashtags that grows whenever any user uses a tag in a recognition, exposed via an API the composer uses to drive its `#` typeahead.
+- `gif-search`: A server-proxied GIF search powered by the Giphy API. The composer hits a backend endpoint with a query string; the backend forwards to Giphy using a server-side API key and returns a slim `{id, previewUrl, gifUrl, alt}` shape.
 
 ### Modified Capabilities
 

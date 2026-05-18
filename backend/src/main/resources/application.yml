@@ -43,15 +43,12 @@ app:
     default-points: 30
     zone: Asia/Manila
 
-  hashtags:
-    - teamwork
-    - ownership
-    - impact
-    - kindness
-
   feed:
     default-page-size: 25
     max-page-size: 100
+
+  giphy:
+    api-key: ${GIPHY_API_KEY:}
 
 logging:
   level:

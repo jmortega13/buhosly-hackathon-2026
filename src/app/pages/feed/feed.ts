@@ -2,11 +2,15 @@ import { Component, inject, signal } from '@angular/core';
 
 import { ApiService } from '../../core/api.service';
 import { FeedItem } from '../../core/types';
+import { ComposerComponent } from '../../shared/composer/composer';
 
 @Component({
   selector: 'app-feed',
+  imports: [ComposerComponent],
   template: `
     <section class="feed">
+      <app-composer (posted)="onPosted()" />
+
       <h2>Recognition feed</h2>
       @if (loading() && items().length === 0) {
         <p class="muted">Loading…</p>
@@ -14,15 +18,26 @@ import { FeedItem } from '../../core/types';
         <p class="muted">No recognitions yet. Be the first to give one!</p>
       }
       <ul class="list">
-        @for (item of items(); track item.createdAt + '-' + item.giver.id + '-' + item.recipient.id) {
+        @for (item of items(); track item.createdAt + '-' + item.giver.id) {
           <li class="card">
             <div class="header">
               <strong>{{ item.giver.name }}</strong>
               <span class="arrow">→</span>
-              <strong>{{ item.recipient.name }}</strong>
-              <span class="amount">+{{ item.amount }}</span>
+              <span class="recipients">
+                @for (r of item.recipients ?? []; track r.id; let last = $last) {
+                  <strong>{{ r.name }}</strong>@if (!last) {<span>,&nbsp;</span>}
+                }
+              </span>
+              <span class="amount">
+                +{{ item.amount }}@if ((item.recipients?.length ?? 0) > 1) {
+                  <span class="multi">&nbsp;each ({{ item.totalAmount ?? item.amount * (item.recipients?.length ?? 1) }} total)</span>
+                }
+              </span>
             </div>
             <p class="message">{{ item.message }}</p>
+            @if (item.gifUrl) {
+              <img class="gif" [src]="item.gifUrl" [alt]="'recognition gif'" loading="lazy" />
+            }
             <div class="tags">
               @for (h of item.hashtags; track h) {
                 <span class="chip">#{{ h }}</span>
@@ -46,48 +61,80 @@ import { FeedItem } from '../../core/types';
     `
       .feed {
         max-width: 720px;
-        margin: 2rem auto;
+        margin: 1.5rem auto;
         padding: 0 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
       }
       h2 {
-        margin: 0 0 1.25rem;
+        margin: 0;
+        color: var(--rise-ink);
       }
       .muted {
-        color: #6b7280;
+        color: var(--rise-muted);
       }
       .list {
         list-style: none;
         padding: 0;
+        margin: 0;
         display: flex;
         flex-direction: column;
         gap: 0.85rem;
       }
       .card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
+        background: var(--rise-card);
+        border: 1px solid var(--rise-line);
+        border-radius: 14px;
         padding: 1rem 1.1rem;
+        box-shadow: 0 2px 10px rgba(17, 24, 39, 0.05);
+        overflow: hidden;
       }
       .header {
         display: flex;
         align-items: center;
         gap: 0.4rem;
         font-size: 1rem;
+        color: var(--rise-ink);
+        flex-wrap: wrap;
+      }
+      .header strong {
+        color: var(--rise-ink);
       }
       .arrow {
-        color: #9ca3af;
+        color: var(--rise-muted-soft);
+      }
+      .recipients {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: baseline;
       }
       .amount {
         margin-left: auto;
-        background: #fef3c7;
-        color: #92400e;
+        background: var(--rise-pink-soft);
+        color: var(--rise-pink-deep);
         font-weight: 700;
-        padding: 0.15rem 0.6rem;
+        padding: 0.15rem 0.65rem;
         border-radius: 999px;
+        white-space: nowrap;
+      }
+      .amount .multi {
+        font-weight: 500;
+        font-size: 0.82rem;
+        opacity: 0.85;
       }
       .message {
         margin: 0.55rem 0 0.4rem;
-        color: #1f2937;
+        color: var(--rise-ink);
+      }
+      .gif {
+        display: block;
+        width: calc(100% + 2.2rem);
+        margin: 0.6rem -1.1rem;
+        max-width: none;
+        border-top: 1px solid var(--rise-line);
+        border-bottom: 1px solid var(--rise-line);
+        background: var(--rise-body);
       }
       .tags {
         display: flex;
@@ -95,8 +142,8 @@ import { FeedItem } from '../../core/types';
         flex-wrap: wrap;
       }
       .chip {
-        background: #e0e7ff;
-        color: #3730a3;
+        background: var(--rise-purple-soft);
+        color: var(--rise-purple);
         font-size: 0.8rem;
         padding: 0.15rem 0.55rem;
         border-radius: 999px;
@@ -104,23 +151,27 @@ import { FeedItem } from '../../core/types';
       .time {
         margin-top: 0.4rem;
         font-size: 0.78rem;
-        color: #9ca3af;
+        color: var(--rise-muted-soft);
       }
       button {
-        margin-top: 1rem;
-        padding: 0.55rem 1rem;
-        background: #2563eb;
+        align-self: flex-start;
+        padding: 0.55rem 1.2rem;
+        background: var(--rise-pink);
         color: white;
         border: none;
-        border-radius: 6px;
+        border-radius: 999px;
         cursor: pointer;
+        font-weight: 600;
+      }
+      button:hover:not(:disabled) {
+        background: var(--rise-pink-deep);
       }
       button:disabled {
         opacity: 0.6;
         cursor: not-allowed;
       }
       .error {
-        color: #b91c1c;
+        color: var(--rise-error);
       }
     `,
   ],
@@ -153,6 +204,13 @@ export class FeedPage {
         this.error.set(err?.error?.message ?? 'failed to load feed');
       },
     });
+  }
+
+  protected onPosted(): void {
+    this.items.set([]);
+    this.page = 0;
+    this.hasMore.set(false);
+    this.loadMore();
   }
 
   protected relative(iso: string): string {

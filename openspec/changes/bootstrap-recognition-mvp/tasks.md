@@ -1,7 +1,7 @@
 ## 1. Backend project setup
 
-- [x] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation, Spring Security, Spring Data JPA) at `backend/` with `application.yml` containing: `spring.datasource.url` / `username` / `password` (env-var placeholders pointing at the compose Postgres by default), `spring.jpa.hibernate.ddl-auto: validate`, Flyway enabled, JWT secret (env-var placeholder), Google OAuth client id (env-var placeholder), `app.auth.allowed-domains: [synacy.com, rise.com]`, `app.allowance.default-points: 30`, `app.allowance.zone: Asia/Manila`, `app.hashtags: [teamwork, ownership, impact, kindness]`, and `app.feed.{default-page-size,max-page-size}`.
-- [x] 1.2 Add `spring-boot-starter-data-jpa`, `org.postgresql:postgresql`, `org.flywaydb:flyway-core`, and `org.flywaydb:flyway-database-postgresql` dependencies. Keep `google-api-client` (still used by `GoogleIdTokenVerifier`). Verify the project builds with `./mvnw clean package`.
+- [x] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation, Spring Security, Spring Data JPA) at `backend/` with `application.yml` containing: `spring.datasource.url` / `username` / `password` (env-var placeholders pointing at the compose Postgres by default), `spring.jpa.hibernate.ddl-auto: validate`, Flyway enabled, JWT secret (env-var placeholder), Google OAuth client id (env-var placeholder), `app.auth.allowed-domains: [synacy.com, rise.com]`, `app.allowance.default-points: 30`, `app.allowance.zone: Asia/Manila`, and `app.feed.{default-page-size,max-page-size}`. **No `app.hashtags` allowlist** — hashtags are freeform.
+- [x] 1.2 Build via **Gradle (Kotlin DSL)**: `build.gradle.kts` declares Spring Boot 3.5 plus `spring-boot-starter-data-jpa`, `org.postgresql:postgresql`, `org.flywaydb:flyway-core`, `org.flywaydb:flyway-database-postgresql`, `google-api-client` (still used by `GoogleIdTokenVerifier`), and `me.paulschwarz:spring-dotenv`. Verify with `./gradlew build`.
 - [x] 1.3 Configure CORS to allow the Angular dev origin (`http://localhost:4200`) and add a global `RestControllerAdvice` that maps validation errors to HTTP 400 with a `{message}` body and `OptimisticLockException` to HTTP 409 with `{"message": "conflicting concurrent update — please retry"}`.
 - [x] 1.4 Define the `RestController` URL prefix as `/api/v1/...`
 
@@ -10,6 +10,10 @@
 - [x] 2.1 Add `docker-compose.yml` at the repo root: `postgres:16-alpine`, port `5432:5432`, a named volume `pgdata`, env vars `POSTGRES_DB=buhosly POSTGRES_USER=buhosly POSTGRES_PASSWORD=buhosly`. Document `docker compose up -d` in the README.
 - [x] 2.2 Create `backend/src/main/resources/db/migration/V1__init.sql` defining the four tables (`users`, `recognitions`, `rewards`, `redemptions`) per `design.md` decision 4, including: UUID primary keys, foreign-key constraints, `row_version INT NOT NULL DEFAULT 0` on `users` (for `@Version` optimistic locking), `CHECK (amount > 0)` on `recognitions.amount`, and an index on `recognitions(created_at DESC)` for the feed.
 - [x] 2.3 Create `V2__seed_rewards.sql` inserting 4 demo reward rows so a fresh DB is demo-ready out of the box.
+- [x] 2.3a Create `V3__hashtags.sql` defining the `hashtags` table (`tag VARCHAR(64) PRIMARY KEY CHECK (tag ~ '^[a-z0-9][a-z0-9_-]{0,63}$')`, `usage_count INT NOT NULL DEFAULT 0`, `last_used_at TIMESTAMPTZ NOT NULL`) plus an index on `(usage_count DESC, last_used_at DESC)` for the suggestion endpoint. Seed 4 starter tags (`teamwork`, `ownership`, `impact`, `kindness`) with `usage_count = 0`.
+- [x] 2.3b Create `V4__seed_test_users.sql` inserting 5 demo users at `@buhosly.demo` (Maria Cruz, Juan Reyes, Anna Garcia, Carlo Santos, Bea Mendoza) with varied giving/earned balances so the `@`-mention dropdown is populated on a fresh DB. These accounts cannot sign in (domain not on the allowlist) — they exist only as recipients. Wrapped in `DO $$ … $$;` so `giving_month` is computed at apply-time in Asia/Manila.
+- [x] 2.3c Create `V5__more_hashtags.sql` adding 10 broader Bonusly-style hashtag suggestions (`collaboration`, `mentorship`, `innovation`, `leadership`, `helpful`, `growth`, `customer-love`, `above-and-beyond`, `problem-solving`, `craftsmanship`) with `ON CONFLICT (tag) DO NOTHING` so the migration is idempotent.
+- [ ] 2.3d Create `V6__add_gif_url.sql` adding a nullable `gif_url VARCHAR(2048)` column to `recognitions`; no index needed.
 - [x] 2.4 Implement JPA `@Converter`s for `YearMonth` ↔ `VARCHAR(7)` and `List<String>` ↔ comma-separated `VARCHAR`; apply via `@Convert` on the relevant entity fields.
 - [x] 2.5 Document the DB layout, env vars, and `docker compose up -d` / Flyway flow in `backend/README.md`.
 
@@ -31,11 +35,11 @@
 ## 5. Domain: give recognition
 
 - [x] 5.1 Define `Recognition` `@Entity` (table `recognitions`, columns `id giver_id recipient_id amount message hashtags created_at`) with the hashtags column mapped via the `StringListConverter`; `RecognitionRepository extends JpaRepository<Recognition, UUID>` with `findAllByOrderByCreatedAtDesc(Pageable)`.
-- [x] 5.2 Implement `RecognitionService.give(giverId, recipientIds, amount, message, hashtags)` annotated `@Transactional`: refresh giver allowance → validate (non-empty, no duplicates, recipients exist, giver not in list, amount > 0, message non-blank, hashtags allowed, `amount × N ≤ givingBalance`) → for each recipient INSERT a recognition row + UPDATE recipient earned balance → UPDATE giver giving balance once. Throws on any failure; transaction rolls back.
-- [x] 5.3 Map each validation failure to HTTP per `give-recognition/spec.md`: empty recipient list → 400, duplicate recipients → 400, any recipient missing → 404 (identify ids), self in recipient list → 400, insufficient total balance → 400, zero/negative amount → 400, empty message → 400, empty hashtags → 400, disallowed hashtag → 400.
+- [ ] 5.2 Update `RecognitionService.give(giverId, recipientIds, amount, message, hashtags)` (annotated `@Transactional`): refresh giver allowance → validate (non-empty recipients, no duplicates, recipients exist, giver not in list, amount > 0, message non-blank, hashtags non-empty AND each matches `^[a-z0-9][a-z0-9_-]{0,63}$` after normalisation, `amount × N ≤ givingBalance`) → INSERT one recognition row per recipient + UPDATE recipient earned balances → UPDATE giver giving balance → **upsert each (de-duplicated) hashtag into the `hashtags` table via `HashtagService.recordAll`**. All inside one transaction.
+- [ ] 5.3 Map each validation failure to HTTP per `give-recognition/spec.md`: empty recipient list → 400, duplicate recipients → 400, any recipient missing → 404 (identify ids), self in recipient list → 400, insufficient total balance → 400, zero/negative amount → 400, empty message → 400, empty hashtags → 400, **malformed hashtag → 400** (identify which one).
 - [x] 5.4 Implement `POST /api/v1/recognitions` accepting `{recipientIds: string[], amount: number, message: string, hashtags: string[]}` and returning HTTP 201 with the list of created recognition rows.
 - [x] 5.5 Translate `OptimisticLockException` (raised by the giver's `@Version` column on conflict) to HTTP 409 with `{"message": "conflicting concurrent update — please retry"}` via the global handler.
-- [ ] 5.6 Unit tests covering: single-recipient happy path, multi-recipient happy path (N rows, debit `amount × N`, credit `amount` each), self alone & alongside others, duplicate recipient ids, empty recipient list, total cost exceeds giving balance (boundary), zero/negative amount, one missing recipient, empty message, empty hashtags, disallowed hashtag.
+- [ ] 5.6 Unit tests covering: single-recipient happy path, multi-recipient happy path (N rows, debit `amount × N`, credit `amount` each, hashtag usage rows upserted), self alone & alongside others, duplicate recipient ids, empty recipient list, total cost exceeds giving balance (boundary), zero/negative amount, one missing recipient, empty message, empty hashtags, malformed hashtag (uppercase / spaces / starts with hyphen / too long).
 
 ## 6. Domain: recognition feed
 
@@ -53,6 +57,21 @@
 - [x] 7.5 Implement `GET /api/v1/redemptions/me` returning the caller's redemption history in reverse-chronological order.
 - [ ] 7.6 Unit tests: successful redemption deducts the right amount, insufficient balance is rejected without write, inactive/missing reward returns 404, `cost_points` snapshot is preserved across later catalog price edits.
 
+## 7a. Domain: hashtag suggestions
+
+- [ ] 7a.1 Define `Hashtag` `@Entity` (table `hashtags`, columns `tag` PK, `usage_count`, `last_used_at`) and `HashtagRepository extends JpaRepository<Hashtag, String>` with `findTop50ByTagStartingWithOrderByUsageCountDescLastUsedAtDesc(String prefix)` and `findTop50ByOrderByUsageCountDescLastUsedAtDesc()`.
+- [ ] 7a.2 Implement `HashtagService.recordAll(Collection<String> tags)`: de-duplicate, then upsert each tag via a native query `INSERT INTO hashtags (tag, usage_count, last_used_at) VALUES (?, 1, ?) ON CONFLICT (tag) DO UPDATE SET usage_count = hashtags.usage_count + 1, last_used_at = EXCLUDED.last_used_at`. Called from inside `RecognitionService.give`'s transaction.
+- [ ] 7a.3 Implement `GET /api/v1/hashtags?q=<prefix>` returning `[{tag, usageCount, lastUsedAt}]` (max 50, ordered per spec).
+- [ ] 7a.4 Unit tests: empty store, prefix filter (case-insensitive), ordering by usage_count then last_used_at, max-50 cap.
+
+## 7b. Domain: GIF search
+
+- [x] 7b.1 Add `app.giphy.api-key: ${GIPHY_API_KEY:}` to `application.yml`, expose it via `AppProperties.Giphy`, and document `GIPHY_API_KEY` in `backend/.env.example`.
+- [x] 7b.2 Implement `GiphyClient` using Spring's `RestClient` to call `https://api.giphy.com/v1/gifs/search?q=<query>&api_key=<key>&limit=20&rating=pg`. Map Giphy's `data[]` to a slim `[{id, previewUrl, gifUrl, alt}]` shape: `previewUrl = images.fixed_width.url`, `gifUrl = images.original.url`, `alt = title`. Handle 5xx / timeouts by raising `ApiException.serviceUnavailable("gif search temporarily unavailable")`.
+- [x] 7b.3 Implement `GET /api/v1/gifs?q=<query>`: 400 if `q` is empty, 503 if `GIPHY_API_KEY` is missing, otherwise delegate to `GiphyClient`.
+- [ ] 7b.4 Update `Recognition` entity to add `private String gifUrl;` (nullable) mapped to column `gif_url`; update `RecognitionService.give` signature to accept an optional `gifUrl`; validate format (`startsWith("https://")` && `length <= 2048`) and reject with HTTP 400 otherwise; persist it on every recognition row generated by the give.
+- [ ] 7b.5 Update `POST /api/v1/recognitions` request body to accept an optional `gifUrl`; update the response (and the feed response) to include the field.
+
 ## 8. Frontend: shared infrastructure
 
 - [x] 8.1 Create `src/environments/environment.ts` with `apiBaseUrl: 'http://localhost:8080/api/v1'` and `googleClientId`.
@@ -62,10 +81,21 @@
 
 ## 9. Frontend: routes and pages
 
-- [x] 9.1 Configure routes: `/login` (public), `/feed` (default, guarded), `/give` (guarded), `/profile` (guarded), `/rewards` (guarded), `/redemptions` (guarded).
+- [x] 9.1 Configure routes: `/login` (public), `/feed` (default, guarded), `/profile` (guarded), `/rewards` (guarded), `/redemptions` (guarded). The give-recognition flow lives inside `/feed` (no standalone `/give` route).
 - [x] 9.2 Build the **Login** page: load Google Identity Services, render the official Google Sign-In button initialised with `environment.googleClientId`, on callback call `AuthService.loginWithGoogle(credential)`; success redirects to `/feed`. No email/password input.
-- [x] 9.3 Build the **Feed** page: signal-based service, show giver name, recipient name, amount, message, hashtag chips, relative timestamp; "load more" pagination.
-- [x] 9.4 Build the **Give** page: multi-select recipient picker (typeahead over `/api/v1/users`), amount-per-recipient input with total-cost preview validated against the giving balance, message textarea, hashtag multi-select. Picker excludes self and prevents duplicate selection. Submit calls `POST /api/v1/recognitions` with `recipientIds: string[]`.
+- [ ] 9.3 Build the **Feed** page with the **`RecognitionComposer` pinned at the top** (above the feed list). Recognition list uses signal-based state, shows giver name, recipient name, amount, message, hashtag chips, relative timestamp; "load more" pagination.
+- [ ] 9.4 Build the **`RecognitionComposer` standalone component** (mounted at the top of the Feed page):
+  - Single `<textarea>` (plain, not contenteditable)
+  - On every input event: scan back from the cursor for `@` or `#` (no whitespace between cursor and the trigger); if found, show a dropdown anchored below the textarea filtered by the typed prefix. Close on space, escape, or selection.
+  - `@` dropdown fetches `/api/v1/users`; selection inserts `@<email-local-part>` and pushes `(handle -> uuid)` into an in-component `Map`.
+  - `#` dropdown fetches `/api/v1/hashtags?q=<prefix>`; selection inserts `#<tag>`. When the typed prefix has no exact match, the dropdown's first row reads "Create new #<typed>" and inserts the typed value.
+  - Parse on every keystroke: `+(\d+)` (first match) → amount; `@([a-z0-9._-]+)` → handles (resolved through the map); `#([a-z0-9_-]+)` → hashtags (lowercased, deduped); remaining text after stripping all three token classes → message.
+  - Render a **live preview bar** below the textarea showing chips for parsed recipients ("Alice Cruz, Bob Diaz"), the total cost ("10 pts × 2 = 20"), and the parsed hashtag chips.
+  - Submit button is enabled only when: ≥ 1 mention resolved via dropdown, `+N` present and positive, message non-blank after token-strip, ≥ 1 hashtag, total cost ≤ current giving balance.
+  - On submit: POST `/api/v1/recognitions` with `{recipientIds, amount, message, hashtags, gifUrl?}`; on success, clear the textarea, clear the attached GIF, and emit a `posted` event so the host page can refresh the feed.
+- [ ] 9.4a Add an **emoji picker** button to the composer (using the `emoji-picker-element` web component, registered via `CUSTOM_ELEMENTS_SCHEMA` on the composer). Clicking the button toggles a popover; selecting an emoji fires `emoji-click`, inserts the emoji's `unicode` at the textarea's current caret position, and closes the popover.
+- [ ] 9.4b Add a **GIF picker** button to the composer that opens a search panel with a debounced (300 ms) text input. On change, hit `GET /api/v1/gifs?q=<query>` and render a 2-column grid of `previewUrl` thumbnails. Selecting a thumbnail attaches the GIF (store `gifUrl` + `previewUrl` in component state, render a preview below the textarea with an "×" remove button, close the panel). Submit includes `gifUrl` in the request body. Reset on successful submit.
+- [ ] 9.4c Render attached GIFs in feed items: when a `FeedItem` includes `gifUrl`, render `<img [src]="item.gifUrl" alt="recognition gif">` below the message; clamp the max height in CSS so a tall GIF doesn't dominate the card.
 - [x] 9.5 Build the **Profile** page from `/api/v1/me`.
 - [x] 9.6 Build the **Rewards** page with a "Redeem" button disabled when `earnedBalance < costPoints`; success refreshes balance.
 - [x] 9.7 Build the **Redemptions** page from `/api/v1/redemptions/me`.
@@ -75,11 +105,11 @@
 
 - [ ] 10.1 `docker compose up -d` from the repo root; verify Postgres is healthy (`docker compose ps`).
 - [ ] 10.2 In Google Cloud Console create an OAuth 2.0 Web client, add `http://localhost:4200` as an authorised JavaScript origin, copy the client id into `environment.googleClientId` and the `GOOGLE_CLIENT_ID` backend env var.
-- [ ] 10.3 Export `JWT_SECRET=$(openssl rand -base64 48)`. Start the backend (`cd backend && ./mvnw spring-boot:run`) and confirm Flyway logs `Successfully applied 2 migrations` (or current count) and the schema appears in `psql -h localhost -U buhosly -d buhosly -c '\dt'`.
+- [ ] 10.3 Copy `backend/.env.example` to `backend/.env` and fill in `JWT_SECRET` and `GOOGLE_CLIENT_ID`. Start the backend (`cd backend && ./gradlew bootRun`) and confirm Flyway logs `Successfully applied 2 migrations` (or current count) and the schema appears in `psql -h localhost -U buhosly -d buhosly -c '\dt'`.
 - [ ] 10.4 Run `ng serve`, sign in with two `@synacy.com` / `@rise.com` Google accounts in two browsers, verify both rows appear in the `users` table via psql. Give a recognition from A → B; verify feed item appears and that `users.giving_balance` (A) dropped and `earned_balance` (B) rose.
 - [ ] 10.5 Redeem a reward as B; verify `earned_balance` drops by the exact cost and a row appears in `redemptions` with `status = 'pending'`.
 - [ ] 10.6 In psql, set a user's `giving_month` to the previous month (`UPDATE users SET giving_month='2026-04' WHERE email=...`); refresh `/me` and verify the balance is reset to 30 and `giving_month` advances to the current Asia/Manila month.
-- [ ] 10.7 Give a multi-recipient recognition (A → B + C + D, 10 each); verify three new entries with identical message/hashtags/created_at and that A's giving balance dropped by 30 while B, C, D each gained 10.
+- [ ] 10.7 Give a multi-recipient recognition (A → B + C + D, 10 each); verify the feed shows **one card** listing all three recipients with "+10 each (30 total)", A's giving balance dropped by 30, and B, C, D each gained 10 (three rows still appear in the `recognitions` table — only the display is grouped).
 - [ ] 10.8 Attempt: self-recognition (A in own recipient list), a give whose total cost exceeds A's balance, a duplicate recipient id, a disallowed hashtag, a redemption that exceeds earned balance. Verify each returns the expected status with no state change.
 - [ ] 10.9 Attempt to sign in with a `@gmail.com` (non-allowlisted) Google account; verify HTTP 403 `"domain not allowed"` and no row is created in `users`.
 - [ ] 10.10 (Optional) Simulate concurrent gives via two parallel curl requests sharing one giver and verify exactly one succeeds while the other returns HTTP 409 `"conflicting concurrent update — please retry"`.

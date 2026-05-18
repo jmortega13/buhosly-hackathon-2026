@@ -35,14 +35,18 @@ import { MeProfile } from '../../core/types';
         margin: 2rem auto;
         padding: 0 1rem;
       }
+      h2 {
+        color: var(--rise-ink);
+      }
       .card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
+        background: var(--rise-card);
+        border: 1px solid var(--rise-line);
+        border-radius: 14px;
         padding: 1.25rem 1.5rem;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        box-shadow: 0 2px 10px rgba(17, 24, 39, 0.05);
       }
       .row {
         display: grid;
@@ -51,12 +55,15 @@ import { MeProfile } from '../../core/types';
         gap: 0.5rem;
       }
       .label {
-        color: #6b7280;
+        color: var(--rise-muted);
         font-size: 0.85rem;
       }
       .muted {
-        color: #9ca3af;
+        color: var(--rise-muted-soft);
         font-size: 0.85rem;
+      }
+      strong {
+        color: var(--rise-pink);
       }
     `,
   ],

@@ -28,8 +28,8 @@ class AllowanceServiceTest {
                     List.of("synacy.com", "rise.com"),
                     new AppProperties.Auth.Google("client-id")),
             new AppProperties.Allowance(30, "Asia/Manila"),
-            List.of("teamwork"),
-            new AppProperties.Feed(25, 100));
+            new AppProperties.Feed(25, 100),
+            new AppProperties.Giphy(""));
 
     @Test
     void refresh_resets_balance_when_giving_month_is_previous_month() {

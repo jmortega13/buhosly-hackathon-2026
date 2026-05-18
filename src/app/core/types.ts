@@ -13,16 +13,20 @@ export interface MeProfile extends AuthUser {
 export interface UserBrief {
   id: string;
   name: string;
-  email?: string;
+  email: string;
 }
 
 export interface FeedItem {
   giver: { id: string; name: string };
-  recipient: { id: string; name: string };
+  // Optional because a stale (pre-grouping) backend may still send the legacy
+  // singular `recipient` field. The template defends against both.
+  recipients?: Array<{ id: string; name: string }>;
   amount: number;
+  totalAmount?: number;
   message: string;
   hashtags: string[];
   createdAt: string;
+  gifUrl: string | null;
 }
 
 export interface FeedPage {
@@ -54,4 +58,18 @@ export interface GiveRequest {
   amount: number;
   message: string;
   hashtags: string[];
+  gifUrl?: string;
+}
+
+export interface GifResult {
+  id: string;
+  previewUrl: string;
+  gifUrl: string;
+  alt: string;
+}
+
+export interface HashtagSuggestion {
+  tag: string;
+  usageCount: number;
+  lastUsedAt: string;
 }

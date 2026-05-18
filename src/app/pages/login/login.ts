@@ -64,39 +64,45 @@ interface GsiButtonOptions {
         min-height: 100vh;
         display: grid;
         place-items: center;
-        background: #f3f4f6;
+        padding: 1.5rem;
+        background: var(--rise-header-bg);
+        background-attachment: fixed;
       }
       .card {
-        background: white;
-        padding: 2rem 2.25rem;
-        border-radius: 12px;
-        width: 360px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        background: var(--rise-card);
+        padding: 2.5rem 2.5rem 2.25rem;
+        border-radius: 18px;
+        width: 380px;
+        max-width: 100%;
+        box-shadow: 0 30px 60px rgba(0, 0, 44, 0.4);
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1rem;
+        gap: 1.1rem;
+        border: 1px solid var(--rise-line);
       }
       h1 {
         margin: 0;
-        color: #fbbf24;
+        color: var(--rise-pink);
+        letter-spacing: 0.04em;
+        font-weight: 700;
       }
       .sub {
         margin: 0;
-        color: #6b7280;
+        color: var(--rise-muted);
         text-align: center;
       }
       .gsi-btn {
         min-height: 44px;
       }
       .error {
-        color: #b91c1c;
+        color: var(--rise-error);
         font-size: 0.9rem;
         margin: 0;
         text-align: center;
       }
       .muted {
-        color: #6b7280;
+        color: var(--rise-muted);
         font-size: 0.9rem;
         margin: 0;
       }

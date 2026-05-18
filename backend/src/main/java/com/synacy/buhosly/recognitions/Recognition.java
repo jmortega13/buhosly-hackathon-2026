@@ -36,6 +36,9 @@ public class Recognition {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "gif_url", length = 2048)
+    private String gifUrl;
+
     protected Recognition() {}
 
     public Recognition(
@@ -45,7 +48,8 @@ public class Recognition {
             int amount,
             String message,
             List<String> hashtags,
-            Instant createdAt) {
+            Instant createdAt,
+            String gifUrl) {
         this.id = id;
         this.giverId = giverId;
         this.recipientId = recipientId;
@@ -53,6 +57,7 @@ public class Recognition {
         this.message = message;
         this.hashtags = hashtags;
         this.createdAt = createdAt;
+        this.gifUrl = gifUrl;
     }
 
     public UUID id() {
@@ -81,5 +86,9 @@ public class Recognition {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    public String gifUrl() {
+        return gifUrl;
     }
 }

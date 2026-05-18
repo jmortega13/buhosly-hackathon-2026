@@ -8,8 +8,10 @@ import com.synacy.buhosly.users.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,7 +48,8 @@ public class RecognitionController {
         } catch (IllegalArgumentException e) {
             throw ApiException.badRequest("recipient ids must be valid UUIDs");
         }
-        var created = service.give(giverId, recipientIds, req.amount(), req.message(), req.hashtags());
+        var created = service.give(
+                giverId, recipientIds, req.amount(), req.message(), req.hashtags(), req.gifUrl());
 
         var ids = new HashSet<UUID>();
         for (var r : created) {
@@ -54,8 +57,7 @@ public class RecognitionController {
             ids.add(r.recipientId());
         }
         var byId = loadUsers(ids);
-        var body = created.stream().map(r -> toFeedItem(r, byId)).toList();
-        return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        return ResponseEntity.status(HttpStatus.CREATED).body(groupAndMap(created, byId));
     }
 
     @GetMapping("/feed")
@@ -74,7 +76,7 @@ public class RecognitionController {
             ids.add(r.recipientId());
         }
         var byId = loadUsers(ids);
-        var view = items.stream().map(r -> toFeedItem(r, byId)).toList();
+        var view = groupAndMap(items, byId);
         return Map.of(
                 "items", view,
                 "page", page,
@@ -88,14 +90,41 @@ public class RecognitionController {
         return byId;
     }
 
-    private static Map<String, Object> toFeedItem(Recognition r, Map<UUID, User> byId) {
-        return Map.of(
-                "giver", userBrief(r.giverId(), byId.get(r.giverId())),
-                "recipient", userBrief(r.recipientId(), byId.get(r.recipientId())),
-                "amount", r.amount(),
-                "message", r.message(),
-                "hashtags", r.hashtags(),
-                "createdAt", r.createdAt().toString());
+    /**
+     * Group adjacent recognition rows that share the same `(giverId, createdAt)` —
+     * i.e. all rows produced by one logical multi-recipient give — into a single
+     * feed item with a `recipients` array. The DB query is ordered by
+     * `created_at DESC, giver_id ASC` so a group's rows are guaranteed to be
+     * contiguous in the result list.
+     */
+    private static List<Map<String, Object>> groupAndMap(List<Recognition> rows, Map<UUID, User> byId) {
+        var groups = new LinkedHashMap<String, List<Recognition>>();
+        for (var r : rows) {
+            var key = r.giverId() + "|" + r.createdAt().toString();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+        }
+        var out = new ArrayList<Map<String, Object>>(groups.size());
+        for (var group : groups.values()) {
+            out.add(toFeedItem(group, byId));
+        }
+        return out;
+    }
+
+    private static Map<String, Object> toFeedItem(List<Recognition> group, Map<UUID, User> byId) {
+        var first = group.get(0);
+        var recipients = group.stream()
+                .map(r -> userBrief(r.recipientId(), byId.get(r.recipientId())))
+                .toList();
+        var item = new LinkedHashMap<String, Object>();
+        item.put("giver", userBrief(first.giverId(), byId.get(first.giverId())));
+        item.put("recipients", recipients);
+        item.put("amount", first.amount());
+        item.put("totalAmount", first.amount() * group.size());
+        item.put("message", first.message());
+        item.put("hashtags", first.hashtags());
+        item.put("createdAt", first.createdAt().toString());
+        item.put("gifUrl", first.gifUrl());
+        return item;
     }
 
     private static Map<String, Object> userBrief(UUID id, User user) {
@@ -106,5 +135,6 @@ public class RecognitionController {
             @NotEmpty List<String> recipientIds,
             @NotNull Integer amount,
             String message,
-            @NotEmpty List<String> hashtags) {}
+            @NotEmpty List<String> hashtags,
+            String gifUrl) {}
 }

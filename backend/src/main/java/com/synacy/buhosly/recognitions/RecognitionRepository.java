@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RecognitionRepository extends JpaRepository<Recognition, UUID> {
 
-    Page<Recognition> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    Page<Recognition> findAllByOrderByCreatedAtDescGiverIdAsc(Pageable pageable);
 }

@@ -3,7 +3,16 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { FeedPage, GiveRequest, MeProfile, Redemption, Reward, UserBrief } from './types';
+import {
+  FeedPage,
+  GifResult,
+  GiveRequest,
+  HashtagSuggestion,
+  MeProfile,
+  Redemption,
+  Reward,
+  UserBrief,
+} from './types';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -38,5 +47,16 @@ export class ApiService {
 
   myRedemptions(): Observable<Redemption[]> {
     return this.http.get<Redemption[]>(`${this.base}/redemptions/me`);
+  }
+
+  hashtags(q?: string): Observable<HashtagSuggestion[]> {
+    let params = new HttpParams();
+    if (q && q.length > 0) params = params.set('q', q);
+    return this.http.get<HashtagSuggestion[]>(`${this.base}/hashtags`, { params });
+  }
+
+  gifs(q: string): Observable<GifResult[]> {
+    const params = new HttpParams().set('q', q);
+    return this.http.get<GifResult[]>(`${this.base}/gifs`, { params });
   }
 }

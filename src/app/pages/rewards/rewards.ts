@@ -48,8 +48,17 @@ import { MeProfile, Reward } from '../../core/types';
         margin: 2rem auto;
         padding: 0 1rem;
       }
+      h2 {
+        color: var(--rise-ink);
+      }
       .balance {
-        color: #374151;
+        color: var(--rise-muted);
+      }
+      .balance strong {
+        color: var(--rise-mint);
+        background: var(--rise-mint-soft);
+        padding: 0.1rem 0.6rem;
+        border-radius: 999px;
       }
       .grid {
         display: grid;
@@ -57,18 +66,19 @@ import { MeProfile, Reward } from '../../core/types';
         gap: 1rem;
       }
       .card {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
+        background: var(--rise-card);
+        border: 1px solid var(--rise-line);
+        border-radius: 14px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        box-shadow: 0 2px 10px rgba(17, 24, 39, 0.05);
       }
       .card img {
         width: 100%;
         height: 140px;
         object-fit: cover;
-        background: #f3f4f6;
+        background: var(--rise-card-elev);
       }
       .body {
         padding: 0.9rem 1rem 1rem;
@@ -78,10 +88,11 @@ import { MeProfile, Reward } from '../../core/types';
       }
       h3 {
         margin: 0 0 0.3rem;
+        color: var(--rise-ink);
       }
       p {
         margin: 0;
-        color: #4b5563;
+        color: var(--rise-muted);
         font-size: 0.9rem;
         flex: 1;
       }
@@ -92,34 +103,38 @@ import { MeProfile, Reward } from '../../core/types';
         align-items: center;
       }
       .cost {
-        background: #fef3c7;
-        color: #92400e;
+        background: var(--rise-pink-soft);
+        color: var(--rise-pink-deep);
         font-weight: 600;
-        padding: 0.2rem 0.6rem;
+        padding: 0.2rem 0.65rem;
         border-radius: 999px;
         font-size: 0.85rem;
       }
       button {
-        background: #16a34a;
+        background: var(--rise-pink);
         color: white;
         border: none;
-        padding: 0.45rem 0.9rem;
-        border-radius: 6px;
-        font-weight: 600;
+        padding: 0.45rem 1.1rem;
+        border-radius: 999px;
+        font-weight: 700;
         cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      button:hover:not(:disabled) {
+        background: var(--rise-pink-deep);
       }
       button:disabled {
-        opacity: 0.5;
+        opacity: 0.45;
         cursor: not-allowed;
       }
       .muted {
-        color: #6b7280;
+        color: var(--rise-muted);
       }
       .success {
-        color: #166534;
+        color: var(--rise-mint);
       }
       .error {
-        color: #b91c1c;
+        color: var(--rise-error);
       }
     `,
   ],

@@ -13,7 +13,6 @@ import { MeProfile } from '../../core/types';
       <a routerLink="/feed" class="brand">buhosly</a>
       <div class="links">
         <a routerLink="/feed" routerLinkActive="active">Feed</a>
-        <a routerLink="/give" routerLinkActive="active">Give</a>
         <a routerLink="/rewards" routerLinkActive="active">Rewards</a>
         <a routerLink="/redemptions" routerLinkActive="active">My redemptions</a>
         <a routerLink="/profile" routerLinkActive="active">Profile</a>
@@ -36,30 +35,38 @@ import { MeProfile } from '../../core/types';
         display: flex;
         align-items: center;
         gap: 1.5rem;
-        padding: 0.75rem 1.25rem;
-        background: #1f2937;
-        color: #f9fafb;
+        padding: 0.85rem 1.5rem;
+        background: var(--rise-header-bg);
+        color: #f1f5fb;
+        box-shadow: 0 2px 10px rgba(0, 0, 44, 0.18);
       }
       .brand {
         font-weight: 700;
-        font-size: 1.1rem;
-        color: #fbbf24;
+        font-size: 1.25rem;
+        color: var(--rise-pink);
         text-decoration: none;
+        letter-spacing: 0.04em;
       }
       .links {
         display: flex;
-        gap: 1rem;
+        gap: 0.3rem;
         flex: 1;
       }
       .links a {
-        color: #d1d5db;
+        color: rgba(255, 255, 255, 0.72);
         text-decoration: none;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        font-size: 0.92rem;
+        transition: background 0.12s ease, color 0.12s ease;
+      }
+      .links a:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
       }
       .links a.active {
-        background: #374151;
-        color: #fff;
+        background: var(--rise-pink);
+        color: white;
       }
       .user {
         display: flex;
@@ -68,31 +75,35 @@ import { MeProfile } from '../../core/types';
       }
       .badge {
         font-size: 0.8rem;
-        padding: 0.2rem 0.55rem;
+        padding: 0.2rem 0.65rem;
         border-radius: 999px;
         font-weight: 600;
       }
       .badge.giving {
-        background: #fde68a;
-        color: #78350f;
+        background: rgba(255, 77, 109, 0.22);
+        color: #ffd0d8;
       }
       .badge.earned {
-        background: #bbf7d0;
-        color: #14532d;
+        background: rgba(134, 239, 172, 0.2);
+        color: #bbf7d0;
       }
       .name {
         font-weight: 500;
+        color: white;
       }
       button {
-        background: #ef4444;
+        background: transparent;
         color: white;
-        border: none;
-        padding: 0.35rem 0.85rem;
-        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        padding: 0.35rem 1rem;
+        border-radius: 999px;
         cursor: pointer;
+        font-size: 0.85rem;
       }
       button:hover {
-        background: #dc2626;
+        background: rgba(255, 255, 255, 0.12);
+        border-color: var(--rise-pink);
+        color: white;
       }
     `,
   ],

@@ -88,16 +88,57 @@ There is no longer a 60-second TTL cache for users or rewards. Postgres + an in-
 
 Angular is zoneless, so we use signals for component state. Each domain has a service (`AuthService`, `RecognitionService`, `RewardsService`) that owns its signals and HTTP calls. No NgRx, no Akita — overkill for the scope.
 
-### 10. Hashtags / company values
+### 10. Hashtags: freeform with shared suggestions
 
-For MVP, the list of allowed hashtags is a configuration property in `application.yml` (e.g., `app.hashtags: [teamwork, ownership, impact, kindness]`). The give-recognition endpoint validates that submitted hashtags are in this list. A future iteration can move this to a `company_values` table if admins need to edit it without redeploying.
+Hashtags are **not** restricted to a fixed allowlist. A user can attach any tag to a recognition (subject to format rules below); every used tag is persisted in a `hashtags` table with a usage counter and a last-used timestamp. The composer's `#` typeahead is powered by `GET /api/v1/hashtags?q=<prefix>`, which returns the top tags ordered by `usage_count DESC, last_used_at DESC`. A "Create new #<typed>" affordance lets a user mint a brand-new tag from inside the dropdown.
 
-### 11. Multi-recipient recognitions = N rows
+- **Format rule** (enforced server-side): a tag must match `^[a-z0-9][a-z0-9_-]{0,63}$` (lowercased, alphanumeric + hyphen + underscore, 1-64 chars). The composer normalises user input (strips a leading `#`, lowercases) before sending.
+- **Alternative considered**: fixed allowlist in `application.yml` (the original design). Rejected because the user explicitly wants Bonusly-style freeform `#tags` so taxonomies emerge organically from how teams actually talk about each other.
+- **Trade-off**: typos (`#teamwrok`) live forever in the suggestion list. Mitigation: admins can `DELETE FROM hashtags WHERE tag = '…'` manually, and individual recognitions still carry the typo even after cleanup. Future work: an admin "merge tag X into Y" tool.
+
+### 11. Bonusly-style composer parser
+
+The give-recognition UI is a single `<textarea>` (plain, not contenteditable) that the user fills with prose like:
+
+```
++10 @alice.cruz @bob.diaz great migration work! #teamwork #impact
+```
+
+The frontend parses on every keystroke:
+
+- `\+(\d+)` (first match) → `amount`
+- `@([a-z0-9._-]+)` → handles; each handle is resolved against an in-component `Map<handle, UUID>` populated when the user picks a suggestion from the `@` dropdown
+- `#([a-z0-9_-]+)` → hashtags (deduplicated, lowercased)
+- The remaining text (with all three token classes stripped) → `message`
+
+A **live preview bar** below the textarea renders the parsed structure as chips ("→ Alice Cruz, Bob Diaz • 10 pts each (total 20) • #teamwork #impact"), and the submit button is enabled only when (a) at least one mention was picked via the dropdown, (b) `+N` is present and positive, (c) the message has non-whitespace content after token-strip, (d) at least one hashtag is present, and (e) `amount × recipients.size() ≤ givingBalance`.
+
+- **Alternative considered**: contenteditable div with inline chip rendering (closer to Bonusly's literal visual). Rejected for the hackathon because of contenteditable's well-known caret/selection bugs and the cost of testing them. The plain textarea + preview-bar pattern delivers the same workflow at ~half the code.
+- **Mention resolution**: typing `@alicecruz` manually (without picking from the dropdown) does NOT count as a valid mention — the composer needs the dropdown selection to know the UUID. Submit is disabled with the message "unresolved mention". Picking from the dropdown is the only path to a valid give.
+- **Single mount point**: the composer is embedded at the top of `/feed`. There is no separate `/give` route — the feed page is the give surface.
+
+### 12. Emoji + GIF attachments
+
+The composer offers two attachment buttons next to the textarea:
+
+- **Emoji** opens a popup containing `emoji-picker-element` (a third-party web component). When the user selects an emoji, the picker fires an `emoji-click` event; the composer inserts the emoji's `unicode` at the textarea's current caret position and dismisses the popup. Emojis are plain Unicode characters that round-trip through the existing `message` column with no schema change.
+- **GIF** opens a search panel with a debounced (300 ms) text input. On change, the composer hits `GET /api/v1/gifs?q=<query>` and renders a 2-column grid of preview thumbnails. Clicking a result attaches that GIF (the composer stores the full-size URL and a `previewUrl` for the in-composer preview). One GIF per recognition; replacing or removing it before submit is supported.
+
+Schema impact: a new nullable `gif_url VARCHAR(2048)` column on `recognitions` (Flyway `V6__add_gif_url.sql`). The `RecognitionService.give` method accepts an optional `gifUrl` and persists it; the feed response includes the field; the feed UI renders `<img src="{gifUrl}">` when present.
+
+- **Why proxy Giphy server-side**: keeps the API key out of the browser, lets us shape the response down to what the frontend actually uses, and gives us a place to add per-user rate limiting later. The backend uses Spring's `RestClient` to call `https://api.giphy.com/v1/gifs/search` with `limit=20&rating=pg`.
+- **Why no GIF moderation in MVP**: Giphy's `rating=pg` parameter filters out adult content server-side. Custom moderation is out of scope.
+- **Alternative considered**: Tenor. Started here, then swapped because the Tenor API enablement flow through Google Cloud Console proved unreliable. Giphy's developer console (developers.giphy.com → Create an App) issues a key in under a minute. The provider sits behind a single `GiphyClient` class — swappable again later if Giphy's free tier ever changes.
+- **Alternative considered**: hand-rolled emoji palette of ~50 common emojis. Rejected at the user's direction — `emoji-picker-element` gives the full Unicode set with categories and search for ~70 KB gzipped.
+- **Storage choice**: GIF stored as a URL (Giphy-hosted), not as a binary blob in our DB. We never download the GIF itself; the browser fetches directly from Giphy's CDN at render time.
+
+### 13. Multi-recipient recognitions = N rows
 
 A recognition addressed to N recipients is stored as N separate rows in the `recognitions` table — one per `(giver, recipient)` pair — each with its own UUID. All rows share the same `message`, `hashtags`, and `created_at`. The per-recipient `amount` is the same on every row. The giver's allowance is debited by `amount × N` in a single update inside the same transaction.
 
 - **Alternative considered**: a single row with a comma-separated recipient list. Rejected because the feed would then need post-processing on every read, balance accounting would parse strings on the hot path, and rows would not be self-contained.
-- **Trade-off**: the feed shows N items for one logical "give" action. That mirrors Bonusly's behaviour and avoids special-casing in the feed renderer. If grouping is desired later, the shared `created_at` + identical `message` are enough of a key to fold them client-side.
+- **Display grouping**: the feed groups adjacent rows that share `(giver_id, created_at)` into a single feed entry whose `recipients` field is an array. So one logical multi-recipient give shows as **one card** with all recipients listed (matching Bonusly's display). The grouping happens server-side in `RecognitionController.feed()`; the DB ordering `created_at DESC, giver_id ASC` keeps a group's rows contiguous in the page.
+- **Trade-off — pagination boundary**: if a multi-recipient give straddles the page boundary (e.g., 3 of 5 rows on page 0, 2 on page 1), the user sees it as two smaller cards. Rare at hackathon scale; the proper fix (a CTE that paginates over distinct `(giver_id, created_at)` keys) is captured as future work.
 - **Atomicity**: the entire multi-recipient give runs inside one `@Transactional` method — validate everything first, then INSERT all N recognition rows, credit all N recipients, debit the giver once. If any step throws, the whole transaction rolls back.
 
 ## Risks / Trade-offs
@@ -111,7 +152,7 @@ A recognition addressed to N recipients is stored as N separate rows in the `rec
 
 ## Migration Plan
 
-Greenfield — there is no pre-existing data to migrate. The repo's `docker-compose.yml` brings up a fresh Postgres instance; the first `./mvnw spring-boot:run` applies `V1__init.sql` (schema) and `V2__seed_rewards.sql` (demo reward rows) automatically. To "reset" the demo, run `docker compose down -v` to drop the volume and start over.
+Greenfield — there is no pre-existing data to migrate. The repo's `docker-compose.yml` brings up a fresh Postgres instance; the first `./gradlew bootRun` applies `V1__init.sql` (schema) and `V2__seed_rewards.sql` (demo reward rows) automatically. To "reset" the demo, run `docker compose down -v` to drop the volume and start over.
 
 ## Resolved Questions
 

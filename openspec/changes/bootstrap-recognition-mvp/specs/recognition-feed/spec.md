@@ -35,9 +35,16 @@ The feed endpoint SHALL support page-based reads to avoid loading the entire `re
 
 ### Requirement: Display fields
 
-Each recognition in the feed response SHALL include the giver (id and display name), recipient (id and display name), amount, message, hashtags, and `createdAt` timestamp. The response MUST NOT include the recognition's own `id` or any other internal-only field. (Giver and recipient ids remain in the response so the client can link to user profiles; only the recognition row id is suppressed.)
+Each feed entry SHALL include the giver (id and display name), a `recipients` array of `{id, name}` objects, `amount` (per-recipient), `totalAmount` (`amount × recipients.length`), message, hashtags, `createdAt` timestamp, and an optional `gifUrl` (present when the recognition has an attached GIF; null or absent otherwise). The response MUST NOT include the recognition rows' own ids or any other internal-only field. (Giver and recipient ids remain in the response so the client can link to user profiles; only the recognition row id is suppressed.)
+
+A multi-recipient give produces N rows in the `recognitions` table (one per recipient) but the feed endpoint SHALL collapse them into a **single** feed entry by grouping rows that share `(giverId, createdAt)`.
 
 #### Scenario: Recognition shape
 
 - **WHEN** an authenticated user retrieves the feed
-- **THEN** each item in the response contains exactly: `giver` (with `id`, `name`), `recipient` (with `id`, `name`), `amount`, `message`, `hashtags` (array), and `createdAt` (ISO-8601 UTC) — and does NOT contain a top-level `id` field
+- **THEN** each item in the response contains: `giver` (with `id`, `name`), `recipients` (array of `{id, name}`), `amount` (per recipient), `totalAmount`, `message`, `hashtags` (array), `createdAt` (ISO-8601 UTC), and `gifUrl` (string or null) — and does NOT contain a top-level `id` field
+
+#### Scenario: Multi-recipient give appears as one feed entry
+
+- **WHEN** giver A submitted a recognition with recipients [B, C, D] in one give, resulting in three rows in the `recognitions` table sharing the same `(giver_id, created_at)`
+- **THEN** the feed returns ONE item with `recipients = [{id: B…, name: …}, {id: C…, name: …}, {id: D…, name: …}]`, `amount` equal to the per-recipient amount, and `totalAmount` equal to `amount × 3`

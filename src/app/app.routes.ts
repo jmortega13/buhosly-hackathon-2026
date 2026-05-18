@@ -14,11 +14,6 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/feed/feed').then((m) => m.FeedPage),
   },
   {
-    path: 'give',
-    canActivate: [authGuard],
-    loadComponent: () => import('./pages/give/give').then((m) => m.GivePage),
-  },
-  {
     path: 'profile',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/profile/profile').then((m) => m.ProfilePage),
