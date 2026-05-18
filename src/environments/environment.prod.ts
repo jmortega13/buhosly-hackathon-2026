@@ -8,6 +8,6 @@
 
 export const environment = {
   production: true,
-  apiBaseUrl: 'https://__YOUR_RENDER_SERVICE__.onrender.com/api/v1',
-  googleClientId: '__SET_ME__.apps.googleusercontent.com',
+  apiBaseUrl: 'https://buhosly-hackathon-2026.onrender.com/api/v1',
+  googleClientId: '546028716669-unl8fthrdkkqa2it8dcil3fvvqrcic8f.apps.googleusercontent.com',
 };
