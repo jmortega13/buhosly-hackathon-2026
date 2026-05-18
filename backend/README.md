@@ -208,6 +208,79 @@ PGPASSWORD=buhosly psql -h localhost -U buhosly -d buhosly
 
 Connection details (match `docker-compose.yml`): host `localhost`, port `5432`, db `buhosly`, user `buhosly`, password `buhosly`.
 
+## Deploying to Render
+
+Render uses the `backend/Dockerfile` to build a JAR and serve it. The Postgres lives separately (Render's managed Postgres, or any external one).
+
+### 1. Create the Postgres first
+
+In the Render dashboard: **New → PostgreSQL**.
+
+- **Name**: `buhosly-db`
+- **Region**: same as the web service (next step)
+- **Plan**: Free (90 days then $7/mo) — or use [Neon](https://neon.tech) for a permanent free tier and skip Render Postgres
+
+Once it's up, open the database page and copy three values from the "Connections" tab:
+
+- **External Connection String** (use this if your web service is somewhere else; otherwise prefer the internal one)
+- **Internal Connection String** (use this if the web service is on Render — same region required)
+- Or the **PSQL Command** to grab the parts individually
+
+### 2. Create the web service
+
+**New → Web Service → connect this GitHub repo**. Then:
+
+| Field | Value |
+| --- | --- |
+| Name | `buhosly-api` (or anything) |
+| Region | same as the Postgres |
+| Branch | `main` (or `buhosly-features-openspec`) |
+| **Root Directory** | `backend` |
+| **Language / Runtime** | `Docker` |
+| **Dockerfile Path** | `./Dockerfile` |
+| **Docker Context Directory** | `.` |
+| Instance Type | Free (cold-start sleep after 15 min idle) |
+
+### 3. Environment variables on the web service
+
+Click **Environment** → add these one by one. The first three are required; the rest are optional but recommended.
+
+| Key | Value |
+| --- | --- |
+| `JWT_SECRET` | a ≥ 32-char random string (`openssl rand -base64 48`) |
+| `GOOGLE_CLIENT_ID` | your OAuth Web client id (same one as dev is fine if you add the Vercel origin) |
+| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://<host>:<port>/<db>` from your Postgres |
+| `SPRING_DATASOURCE_USERNAME` | from the Postgres connection string |
+| `SPRING_DATASOURCE_PASSWORD` | from the Postgres connection string |
+| `CORS_ALLOWED_ORIGINS` | your Vercel URL, e.g. `https://buhosly-hackathon-2026.vercel.app` (comma-separated for multiple) |
+| `ADMIN_EMAILS` | comma-separated admin emails (your own to start) |
+| `GIPHY_API_KEY` | your Giphy key (or skip — picker degrades gracefully) |
+
+The `PORT` env var is set automatically by Render; the Dockerfile reads it.
+
+### 4. Update Google OAuth
+
+In Google Cloud Console → APIs & Services → Credentials → your OAuth Web client → **Authorized JavaScript origins**:
+
+- Keep `http://localhost:4200`
+- Add `https://<your-app>.vercel.app`
+
+### 5. Deploy
+
+Render auto-deploys on push to the configured branch. First build takes ~3–5 minutes (Gradle pulls all deps). Watch the **Logs** tab; you want to see:
+
+```
+Migrating schema "public" to version "8 - admin overrides"
+Successfully applied 8 migrations to schema "public"
+Started BuhoslyApplication
+```
+
+If the build fails on `./gradlew` permissions, check that `backend/gradlew` is executable in the repo (`git ls-files --stage gradlew` should show `100755`). The Dockerfile `chmod +x`s it anyway.
+
+### 6. Point the frontend at it
+
+In `src/environments/environment.prod.ts` (create it if missing), set `apiBaseUrl` to your Render service URL + `/api/v1`. Redeploy the Vercel project. Tail the Render Logs while you sign in to confirm the requests are landing.
+
 ## Resetting the demo
 
 ```bash
