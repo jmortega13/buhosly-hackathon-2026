@@ -42,7 +42,7 @@ One spreadsheet, four tabs:
 
 | Tab            | Columns                                                                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `users`        | `id` (UUID), `email`, `name`, `passwordHash` (BCrypt), `givingBalance` (int), `givingMonth` (YYYY-MM), `earnedBalance` (int), `createdAt` (ISO-8601 UTC) |
+| `users`        | `id` (UUID), `email`, `name`, `passwordHash` (BCrypt), `givingBalance` (int), `givingMonth` (YYYY-MM, **Asia/Manila** local time), `earnedBalance` (int), `createdAt` (ISO-8601 UTC) |
 | `recognitions` | `id` (UUID), `giverId`, `recipientId`, `amount` (int), `message`, `hashtags` (comma-sep), `createdAt`                                            |
 | `rewards`      | `id` (UUID), `name`, `description`, `costPoints` (int), `imageUrl`, `active` (bool)                                                              |
 | `redemptions`  | `id` (UUID), `userId`, `rewardId`, `costPoints` (int snapshot), `createdAt`, `status` (`pending`/`fulfilled`/`cancelled`)                        |
@@ -60,9 +60,10 @@ Users are pre-seeded into the `users` tab (no self-signup in MVP). Login takes `
 
 ### 5. Monthly allowance refresh: lazy
 
-Each user row carries `givingBalance` and `givingMonth` (YYYY-MM). Every time a user attempts to give recognition (or fetches their profile), the service checks: if `givingMonth != currentMonth(UTC)`, set `givingBalance := DEFAULT_ALLOWANCE` and `givingMonth := currentMonth`, then proceed. No scheduler, no nightly job.
+Each user row carries `givingBalance` and `givingMonth` (YYYY-MM, **Asia/Manila** local time). Every time a user attempts to give recognition (or fetches their profile), the service checks: if `givingMonth != currentMonth("Asia/Manila")`, set `givingBalance := DEFAULT_ALLOWANCE` (configured to **30**) and `givingMonth := currentMonth("Asia/Manila")`, then proceed. No scheduler, no nightly job.
 
 - **Alternative considered**: a scheduled Spring `@Scheduled` task on the 1st of each month that rewrites every user row. Rejected because lazy refresh has equivalent behaviour, naturally handles users who don't log in for a month, and avoids a write storm at midnight on the 1st (which would risk hitting Sheets quotas).
+- **Time zone rationale**: Asia/Manila chosen because Synacy is in PH — users expect the allowance to refresh when *their* calendar flips to the 1st, not at 08:00 local on the 1st (which is what UTC midnight would give them). Java code SHOULD use `ZoneId.of("Asia/Manila")` rather than the server default zone, so behaviour is identical regardless of where the JVM runs.
 
 ### 6. Concurrency: serialize writes
 
@@ -105,9 +106,9 @@ A recognition addressed to N recipients is stored as N separate rows in the `rec
 
 Not applicable — greenfield. To make a future move off Sheets cheap, the persistence layer lives behind Java repository interfaces (`UserRepository`, `RecognitionRepository`, `RewardRepository`, `RedemptionRepository`). The Sheets-backed implementations are the only concrete classes in this proposal; a JPA implementation can replace them later without touching the service layer.
 
-## Open Questions
+## Resolved Questions
 
-- **Default monthly allowance amount.** Proposing `100` to match Bonusly's typical default. Final number is admin-configurable via `application.yml`.
-- **Hashtag list for launch.** Proposing `teamwork`, `ownership`, `impact`, `kindness` as placeholders. Synacy's actual company values should replace these before the demo.
-- **Reward inventory.** Proposing unlimited (a reward is always purchasable if `active=true`). Quantity limits deferred unless explicitly requested.
-- **Time zone for "current month".** Proposing UTC for simplicity. Synacy is in PH (UTC+8) — if a user gives points just after midnight local on the 1st, UTC will still be the previous day. Confirm whether to switch to PH local time.
+- **Default monthly allowance amount: `30` points per user.** Lower than Bonusly's typical 100 — keeps each give meaningful at the hackathon's smaller scale and surfaces "insufficient balance" and multi-recipient cost math during demos. Stored in `application.yml` under `app.allowance.default-points` so it can be raised without a code change.
+- **Hashtag list at launch: `teamwork`, `ownership`, `impact`, `kindness`.** Placeholder values for the demo. Stored in `application.yml` under `app.hashtags`; swapping in Synacy's actual company values is a config edit, not a code change.
+- **Reward inventory: unlimited per reward.** A reward is purchasable as long as `active = true` — no stock column on the `rewards` sheet, no decrement on redemption. If physical-item rewards are added later, an `inventory` column can be introduced without breaking existing reward rows.
+- **Month rollover time zone: `Asia/Manila` (UTC+8).** The allowance refreshes when the user's *local* calendar flips to the 1st. All "current month" comparisons in the Spring Boot service MUST use `ZoneId.of("Asia/Manila")`, not the JVM default zone, so behaviour is independent of where the service runs.

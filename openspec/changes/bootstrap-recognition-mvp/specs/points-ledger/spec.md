@@ -2,22 +2,27 @@
 
 ### Requirement: Monthly giving allowance refresh
 
-Each user SHALL have a giving balance that resets to a configurable default amount at the start of each calendar month. Unused allowance MUST NOT roll over into the next month. Refresh SHALL be applied lazily — the first time the user takes any action in a new month, their giving balance is reset before that action is evaluated.
+Each user SHALL have a giving balance that resets to a configurable default amount (default at launch: **30 points**) at the start of each calendar month. "Calendar month" SHALL be evaluated in the **Asia/Manila** time zone, regardless of the JVM's default zone. Unused allowance MUST NOT roll over into the next month. Refresh SHALL be applied lazily — the first time the user takes any action in a new month, their giving balance is reset before that action is evaluated.
 
 #### Scenario: First action in a new month
 
-- **WHEN** a user attempts to give recognition or fetches their profile, and their stored `givingMonth` is earlier than the current month
-- **THEN** the system sets their `givingBalance` to the configured default and `givingMonth` to the current month before evaluating the action
+- **WHEN** a user attempts to give recognition or fetches their profile, and their stored `givingMonth` is earlier than the current month in Asia/Manila
+- **THEN** the system sets their `givingBalance` to the configured default and `givingMonth` to the current month (Asia/Manila) before evaluating the action
 
 #### Scenario: Same-month action does not refresh
 
-- **WHEN** a user takes any action and their stored `givingMonth` already matches the current month
+- **WHEN** a user takes any action and their stored `givingMonth` already matches the current month in Asia/Manila
 - **THEN** the system does NOT modify `givingBalance` or `givingMonth` as part of the refresh logic
 
 #### Scenario: Unused allowance does not roll over
 
-- **WHEN** a user ends a month with a non-zero giving balance and the next month begins
+- **WHEN** a user ends a month with a non-zero giving balance and the next month begins (in Asia/Manila)
 - **THEN** on the user's next action the giving balance is reset to the default — the prior month's unused amount is lost
+
+#### Scenario: Month boundary is interpreted in Asia/Manila, not UTC
+
+- **WHEN** the current UTC time is 23:00 on the 31st (so 07:00 on the 1st in Asia/Manila) and a user's stored `givingMonth` matches the prior month
+- **THEN** the system treats this as a new month and refreshes the user's balance (Asia/Manila is the source of truth)
 
 ### Requirement: Earned balance accumulation
 

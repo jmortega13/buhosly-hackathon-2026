@@ -1,6 +1,6 @@
 ## 1. Backend project setup
 
-- [ ] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation) at `backend/` with `application.yml` placeholders for the Sheets spreadsheet id, service-account credential path, JWT secret, default monthly allowance, and allowed hashtag list
+- [ ] 1.1 Create a Spring Boot module (Java 21, Spring Web, Spring Validation) at `backend/` with `application.yml` containing: Sheets spreadsheet id + service-account credential path (env-var placeholders, left empty), JWT secret (env-var placeholder), `app.allowance.default-points: 30`, `app.allowance.zone: Asia/Manila`, and `app.hashtags: [teamwork, ownership, impact, kindness]`
 - [ ] 1.2 Add the `google-api-services-sheets` and `google-auth-library-oauth2-http` dependencies and verify the project builds with `./mvnw clean package` (or Gradle equivalent)
 - [ ] 1.3 Configure CORS to allow the Angular dev origin (`http://localhost:4200`) and add a global `RestControllerAdvice` that maps validation errors to HTTP 400 with a `{message}` body
 - [ ] 1.4 Define the `RestController` URL prefix as `/api/v1/...`
@@ -24,9 +24,9 @@
 
 ## 4. Domain: points ledger
 
-- [ ] 4.1 Implement an `AllowanceService.refreshIfNeeded(user)` that, if `user.givingMonth != currentMonthUtc()`, sets `givingBalance = DEFAULT_ALLOWANCE` and `givingMonth = currentMonthUtc()` and persists the row (satisfies `points-ledger` Requirement: Monthly giving allowance refresh)
+- [ ] 4.1 Implement an `AllowanceService.refreshIfNeeded(user)` that, if `user.givingMonth != currentMonth("Asia/Manila")`, sets `givingBalance = app.allowance.default-points` (30) and `givingMonth = currentMonth("Asia/Manila")` and persists the row. Use `ZoneId.of("Asia/Manila")` explicitly — do NOT rely on the JVM default zone. Satisfies `points-ledger` Requirement: Monthly giving allowance refresh.
 - [ ] 4.2 Ensure every "give" or profile-read code path invokes `refreshIfNeeded` exactly once at the entry point
-- [ ] 4.3 Add a unit test that simulates a user whose `givingMonth` is the previous month and verifies refresh; add a second test that same-month users are not touched
+- [ ] 4.3 Add unit tests for `AllowanceService.refreshIfNeeded`: (a) previous-month `givingMonth` is refreshed to 30 and current Asia/Manila month, (b) same-month users are not touched, (c) boundary case where UTC clock says the 31st but Asia/Manila is already on the 1st — verify the refresh fires
 
 ## 5. Domain: give recognition
 
