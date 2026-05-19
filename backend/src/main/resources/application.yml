@@ -35,9 +35,9 @@ app:
     expires-minutes: 720
 
   auth:
-    allowed-domains:
-      - synacy.com
-      - rise.com
+    # Comma-separated list of email domains allowed at sign-in. Override at
+    # deploy time with ALLOWED_DOMAINS=synacy.com,rise.com,other.com (no spaces).
+    allowed-domains: ${ALLOWED_DOMAINS:synacy.com,rise.com}
     admin-emails: ${ADMIN_EMAILS:}
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

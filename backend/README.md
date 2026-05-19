@@ -253,6 +253,7 @@ Click **Environment** → add these one by one. The first three are required; th
 | `SPRING_DATASOURCE_USERNAME` | from the Postgres connection string |
 | `SPRING_DATASOURCE_PASSWORD` | from the Postgres connection string |
 | `CORS_ALLOWED_ORIGINS` | your Vercel URL, e.g. `https://buhosly-hackathon-2026.vercel.app` (comma-separated for multiple) |
+| `ALLOWED_DOMAINS` | comma-separated email domains accepted at sign-in, default `synacy.com,rise.com` |
 | `ADMIN_EMAILS` | comma-separated admin emails (your own to start) |
 | `GIPHY_API_KEY` | your Giphy key (or skip — picker degrades gracefully) |
 
