@@ -23,7 +23,13 @@ import { Redemption } from '../../core/types';
             </div>
             <div class="meta">
               <span class="cost">{{ r.costPoints }} pts</span>
-              <span class="status" [class.pending]="r.status === 'pending'">{{ r.status }}</span>
+              <span
+                class="status"
+                [class.pending]="r.status === 'pending'"
+                [class.approved]="r.status === 'approved'"
+                [class.fulfilled]="r.status === 'fulfilled'"
+                [class.cancelled]="r.status === 'cancelled'"
+              >{{ r.status }}</span>
             </div>
           </li>
         }
@@ -94,6 +100,18 @@ import { Redemption } from '../../core/types';
       .status.pending {
         background: var(--rise-warn-soft);
         color: var(--rise-warn);
+      }
+      .status.approved {
+        background: var(--rise-pink-soft);
+        color: var(--rise-pink-deep);
+      }
+      .status.fulfilled {
+        background: var(--rise-mint-soft);
+        color: var(--rise-mint);
+      }
+      .status.cancelled {
+        background: var(--rise-error-soft);
+        color: var(--rise-error);
       }
       .muted {
         color: var(--rise-muted);

@@ -79,8 +79,8 @@ public class AdminRedemptionsController {
     @PostMapping("/{id}/approve")
     @Transactional
     public Map<String, Object> approve(@PathVariable UUID id) {
-        var redemption = requirePending(id);
-        redemption.setStatus(Redemption.STATUS_FULFILLED);
+        var redemption = requireStatus(id, Redemption.STATUS_PENDING);
+        redemption.setStatus(Redemption.STATUS_APPROVED);
         redemptions.save(redemption);
         return toView(redemption, usersById(), rewardsById());
     }
@@ -88,7 +88,7 @@ public class AdminRedemptionsController {
     @PostMapping("/{id}/reject")
     @Transactional
     public Map<String, Object> reject(@PathVariable UUID id) {
-        var redemption = requirePending(id);
+        var redemption = requireStatus(id, Redemption.STATUS_PENDING);
         redemption.setStatus(Redemption.STATUS_CANCELLED);
         redemptions.save(redemption);
 
@@ -100,12 +100,22 @@ public class AdminRedemptionsController {
         return toView(redemption, usersById(), rewardsById());
     }
 
-    private Redemption requirePending(UUID id) {
+    @PostMapping("/{id}/fulfill")
+    @Transactional
+    public Map<String, Object> fulfill(@PathVariable UUID id) {
+        var redemption = requireStatus(id, Redemption.STATUS_APPROVED);
+        redemption.setStatus(Redemption.STATUS_FULFILLED);
+        redemptions.save(redemption);
+        return toView(redemption, usersById(), rewardsById());
+    }
+
+    private Redemption requireStatus(UUID id, String expected) {
         var redemption = redemptions.findById(id)
                 .orElseThrow(() -> ApiException.notFound("redemption not found"));
-        if (!Redemption.STATUS_PENDING.equals(redemption.status())) {
+        if (!expected.equals(redemption.status())) {
             throw new ApiException(
-                    org.springframework.http.HttpStatus.CONFLICT, "redemption is not pending");
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "redemption is not " + expected);
         }
         return redemption;
     }

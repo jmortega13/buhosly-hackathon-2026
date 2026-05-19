@@ -6,7 +6,7 @@ import { AdminRedemptionRow } from '../../../core/types';
 import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
 
 interface ConfirmingAction {
-  type: 'approve' | 'reject';
+  type: 'approve' | 'reject' | 'fulfill';
   redemption: AdminRedemptionRow;
 }
 
@@ -51,7 +51,13 @@ interface ConfirmingAction {
               <td>{{ r.reward.name }}</td>
               <td>{{ r.costPoints }}</td>
               <td>
-                <span class="status" [class.pending]="r.status === 'pending'" [class.fulfilled]="r.status === 'fulfilled'" [class.cancelled]="r.status === 'cancelled'">{{ r.status }}</span>
+                <span
+                  class="status"
+                  [class.pending]="r.status === 'pending'"
+                  [class.approved]="r.status === 'approved'"
+                  [class.fulfilled]="r.status === 'fulfilled'"
+                  [class.cancelled]="r.status === 'cancelled'"
+                >{{ r.status }}</span>
               </td>
               <td>
                 @if (r.status === 'pending') {
@@ -73,6 +79,17 @@ interface ConfirmingAction {
                       Reject
                     </button>
                   </div>
+                } @else if (r.status === 'approved') {
+                  <div class="actions-cell">
+                    <button
+                      type="button"
+                      class="fulfill"
+                      (click)="fulfill(r)"
+                      [disabled]="busyId() === r.id"
+                    >
+                      {{ busyId() === r.id ? '…' : 'Mark fulfilled' }}
+                    </button>
+                  </div>
                 }
               </td>
             </tr>
@@ -88,13 +105,17 @@ interface ConfirmingAction {
         <div class="modal" (click)="$event.stopPropagation()">
           <div class="modal-body">
             <h3>
-              {{ ca.type === 'approve' ? 'Approve redemption' : 'Reject redemption' }}
+              @if (ca.type === 'approve') { Approve redemption }
+              @else if (ca.type === 'reject') { Reject redemption }
+              @else { Mark redemption fulfilled }
             </h3>
             <p class="modal-desc">
               @if (ca.type === 'approve') {
-                Mark this redemption as <strong>fulfilled</strong>? No balance changes — the user already paid when they redeemed.
-              } @else {
+                Mark this redemption as <strong>approved</strong>? Move on to <em>fulfilled</em> once the physical reward has been handed over. No balance changes — the user already paid when they redeemed.
+              } @else if (ca.type === 'reject') {
                 Cancel this redemption and <strong>refund {{ ca.redemption.costPoints }} pts</strong> back to the user's earned balance. This cannot be undone from the UI.
+              } @else {
+                Confirm the physical reward has been handed over and mark this redemption as <strong>fulfilled</strong>. No balance changes.
               }
             </p>
 
@@ -135,18 +156,20 @@ interface ConfirmingAction {
               </button>
               <button
                 type="button"
-                [class.approve-primary]="ca.type === 'approve'"
+                [class.approve-primary]="ca.type === 'approve' || ca.type === 'fulfill'"
                 [class.reject-primary]="ca.type === 'reject'"
                 (click)="confirmAction()"
                 [disabled]="busyId() === ca.redemption.id"
               >
-                {{
-                  busyId() === ca.redemption.id
-                    ? 'Working…'
-                    : ca.type === 'approve'
-                      ? 'Confirm approval'
-                      : 'Confirm rejection'
-                }}
+                @if (busyId() === ca.redemption.id) {
+                  Working…
+                } @else if (ca.type === 'approve') {
+                  Confirm approval
+                } @else if (ca.type === 'reject') {
+                  Confirm rejection
+                } @else {
+                  Mark fulfilled
+                }
               </button>
             </div>
           </div>
@@ -212,6 +235,10 @@ interface ConfirmingAction {
         background: var(--rise-warn-soft);
         color: var(--rise-warn);
       }
+      .status.approved {
+        background: var(--rise-pink-soft);
+        color: var(--rise-pink-deep);
+      }
       .status.fulfilled {
         background: var(--rise-mint-soft);
         color: var(--rise-mint);
@@ -256,6 +283,13 @@ interface ConfirmingAction {
       }
       button.reject:hover:not(:disabled) {
         background: var(--rise-error-soft);
+      }
+      button.fulfill {
+        background: var(--rise-pink);
+        color: white;
+      }
+      button.fulfill:hover:not(:disabled) {
+        background: var(--rise-pink-deep);
       }
       button:disabled {
         opacity: 0.5;
@@ -411,6 +445,11 @@ export class AdminRedemptionsPage {
     this.confirmingAction.set({ type: 'reject', redemption: r });
   }
 
+  protected fulfill(r: AdminRedemptionRow): void {
+    this.error.set(null);
+    this.confirmingAction.set({ type: 'fulfill', redemption: r });
+  }
+
   protected cancelConfirm(): void {
     if (this.busyId() != null) return;
     this.confirmingAction.set(null);
@@ -425,7 +464,9 @@ export class AdminRedemptionsPage {
     const obs =
       ca.type === 'approve'
         ? this.api.adminApproveRedemption(ca.redemption.id)
-        : this.api.adminRejectRedemption(ca.redemption.id);
+        : ca.type === 'reject'
+          ? this.api.adminRejectRedemption(ca.redemption.id)
+          : this.api.adminFulfillRedemption(ca.redemption.id);
     obs.subscribe({
       next: (updated) => {
         this.busyId.set(null);

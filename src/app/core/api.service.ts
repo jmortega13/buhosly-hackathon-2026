@@ -133,6 +133,10 @@ export class ApiService {
     return this.http.post<AdminRedemptionRow>(`${this.base}/admin/redemptions/${id}/reject`, {});
   }
 
+  adminFulfillRedemption(id: string): Observable<AdminRedemptionRow> {
+    return this.http.post<AdminRedemptionRow>(`${this.base}/admin/redemptions/${id}/fulfill`, {});
+  }
+
   adminRedemptionsCsv(): Observable<Blob> {
     return this.http.get(`${this.base}/admin/redemptions.csv`, { responseType: 'blob' });
   }

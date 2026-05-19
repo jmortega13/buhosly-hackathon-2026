@@ -12,6 +12,7 @@ import java.util.UUID;
 public class Redemption {
 
     public static final String STATUS_PENDING = "pending";
+    public static final String STATUS_APPROVED = "approved";
 
     @Id
     private UUID id;
