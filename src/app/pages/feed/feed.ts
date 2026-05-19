@@ -35,14 +35,16 @@ import { ComposerComponent } from '../../shared/composer/composer';
               </span>
             </div>
             <p class="message">{{ item.message }}</p>
+            @if (item.hashtags.length) {
+              <div class="tags">
+                @for (h of item.hashtags; track h) {
+                  <span class="chip">#{{ h }}</span>
+                }
+              </div>
+            }
             @if (item.gifUrl) {
               <img class="gif" [src]="item.gifUrl" [alt]="'recognition gif'" loading="lazy" />
             }
-            <div class="tags">
-              @for (h of item.hashtags; track h) {
-                <span class="chip">#{{ h }}</span>
-              }
-            </div>
             <div class="time">{{ relative(item.createdAt) }}</div>
           </li>
         }

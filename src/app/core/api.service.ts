@@ -111,6 +111,14 @@ export class ApiService {
     return this.http.get<AdminRedemptionRow[]>(`${this.base}/admin/redemptions`);
   }
 
+  adminApproveRedemption(id: string): Observable<AdminRedemptionRow> {
+    return this.http.post<AdminRedemptionRow>(`${this.base}/admin/redemptions/${id}/approve`, {});
+  }
+
+  adminRejectRedemption(id: string): Observable<AdminRedemptionRow> {
+    return this.http.post<AdminRedemptionRow>(`${this.base}/admin/redemptions/${id}/reject`, {});
+  }
+
   adminRedemptionsCsv(): Observable<Blob> {
     return this.http.get(`${this.base}/admin/redemptions.csv`, { responseType: 'blob' });
   }

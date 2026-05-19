@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 
 import { ApiService } from '../../core/api.service';
 import { CelebrateService } from '../../core/celebrate.service';
@@ -28,10 +28,10 @@ import { MeProfile, Reward } from '../../core/types';
                 <span class="cost">{{ r.costPoints }} pts</span>
                 <button
                   type="button"
-                  [disabled]="!canAfford(r) || redeeming() === r.id"
-                  (click)="redeem(r, $event)"
+                  [disabled]="!canAfford(r)"
+                  (click)="openConfirm(r, $event)"
                 >
-                  {{ redeeming() === r.id ? 'Redeeming…' : 'Redeem' }}
+                  Redeem
                 </button>
               </div>
             </div>
@@ -41,6 +41,52 @@ import { MeProfile, Reward } from '../../core/types';
       @if (message()) { <p class="success">{{ message() }}</p> }
       @if (error()) { <p class="error">{{ error() }}</p> }
     </section>
+
+    @if (confirming(); as r) {
+      <div class="backdrop" (click)="cancel()" role="dialog" aria-modal="true">
+        <div class="modal" (click)="$event.stopPropagation()">
+          @if (r.imageUrl) {
+            <img class="hero" [src]="r.imageUrl" [alt]="r.name" />
+          }
+          <div class="modal-body">
+            <h3>{{ r.name }}</h3>
+            <p class="desc">{{ r.description }}</p>
+
+            <dl class="summary">
+              <div>
+                <dt>Reward cost</dt>
+                <dd class="cost-row">−{{ r.costPoints }} pts</dd>
+              </div>
+              <div>
+                <dt>Your earned balance</dt>
+                <dd>{{ me()?.earnedBalance ?? 0 }} pts</dd>
+              </div>
+              <div class="after">
+                <dt>After redeeming</dt>
+                <dd>{{ balanceAfter() }} pts</dd>
+              </div>
+            </dl>
+
+            <p class="note">Redemptions are queued as <strong>pending</strong>. You can view them under "My redemptions".</p>
+
+            @if (error()) { <p class="error">{{ error() }}</p> }
+
+            <div class="actions">
+              <button type="button" class="ghost" (click)="cancel()" [disabled]="busy()">Cancel</button>
+              <button
+                type="button"
+                class="primary"
+                #confirmBtn
+                (click)="confirm(confirmBtn)"
+                [disabled]="busy()"
+              >
+                {{ busy() ? 'Redeeming…' : 'Confirm redemption' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [
     `
@@ -137,6 +183,110 @@ import { MeProfile, Reward } from '../../core/types';
       .error {
         color: var(--rise-error);
       }
+
+      /* Confirmation modal */
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 44, 0.55);
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        z-index: 100;
+        animation: fade-in 0.15s ease;
+      }
+      .modal {
+        background: var(--rise-card);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 440px;
+        overflow: hidden;
+        box-shadow: 0 30px 60px rgba(0, 0, 44, 0.4);
+        animation: pop-in 0.18s ease;
+      }
+      .hero {
+        display: block;
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+      }
+      .modal-body {
+        padding: 1.4rem 1.5rem;
+      }
+      .modal-body h3 {
+        margin: 0 0 0.35rem;
+        color: var(--rise-ink);
+        font-size: 1.2rem;
+      }
+      .desc {
+        margin: 0 0 1rem;
+        color: var(--rise-muted);
+      }
+      .summary {
+        margin: 0 0 1rem;
+        padding: 0.75rem 1rem;
+        background: var(--rise-card-elev);
+        border-radius: 10px;
+        border: 1px solid var(--rise-line);
+      }
+      .summary div {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.25rem 0;
+      }
+      .summary dt {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--rise-muted);
+      }
+      .summary dd {
+        margin: 0;
+        font-weight: 600;
+        color: var(--rise-ink);
+      }
+      .summary .cost-row {
+        color: var(--rise-pink-deep);
+      }
+      .summary .after {
+        border-top: 1px dashed var(--rise-line);
+        margin-top: 0.35rem;
+        padding-top: 0.5rem;
+      }
+      .summary .after dt,
+      .summary .after dd {
+        color: var(--rise-mint);
+        font-weight: 700;
+      }
+      .note {
+        margin: 0 0 1rem;
+        font-size: 0.82rem;
+        color: var(--rise-muted-soft);
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
+      .primary { background: var(--rise-pink); }
+      .ghost {
+        background: transparent;
+        color: var(--rise-muted);
+        border: 1px solid var(--rise-line-strong);
+      }
+      .ghost:hover:not(:disabled) {
+        background: var(--rise-card-elev);
+        color: var(--rise-ink);
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes pop-in {
+        from { opacity: 0; transform: translateY(8px) scale(0.97); }
+        to { opacity: 1; transform: none; }
+      }
     `,
   ],
 })
@@ -147,9 +297,19 @@ export class RewardsPage {
   protected readonly rewards = signal<Reward[]>([]);
   protected readonly me = signal<MeProfile | null>(null);
   protected readonly loading = signal(true);
-  protected readonly redeeming = signal<string | null>(null);
+  protected readonly busy = signal(false);
+  protected readonly confirming = signal<Reward | null>(null);
   protected readonly message = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
+
+  private redeemAnchor: HTMLElement | null = null;
+
+  protected readonly balanceAfter = computed(() => {
+    const m = this.me();
+    const r = this.confirming();
+    if (!m || !r) return 0;
+    return m.earnedBalance - r.costPoints;
+  });
 
   constructor() {
     this.refresh();
@@ -160,20 +320,36 @@ export class RewardsPage {
     return m != null && m.earnedBalance >= r.costPoints;
   }
 
-  protected redeem(r: Reward, event: MouseEvent): void {
+  protected openConfirm(r: Reward, event: MouseEvent): void {
     this.message.set(null);
     this.error.set(null);
-    this.redeeming.set(r.id);
-    const anchor = event.currentTarget as HTMLElement | null;
+    this.redeemAnchor = event.currentTarget as HTMLElement | null;
+    this.confirming.set(r);
+  }
+
+  protected cancel(): void {
+    if (this.busy()) return;
+    this.confirming.set(null);
+    this.error.set(null);
+  }
+
+  protected confirm(confirmBtn: HTMLElement): void {
+    const r = this.confirming();
+    if (!r) return;
+    this.busy.set(true);
+    this.error.set(null);
     this.api.redeem(r.id).subscribe({
       next: () => {
-        this.redeeming.set(null);
+        this.busy.set(false);
+        this.confirming.set(null);
         this.message.set(`Redeemed "${r.name}" (${r.costPoints} pts).`);
-        this.celebrate.redemption(anchor);
+        // Burst from the original card button when possible; fall back to the
+        // modal's confirm button (which is what the user just clicked).
+        this.celebrate.redemption(this.redeemAnchor ?? confirmBtn);
         this.api.me().subscribe({ next: (m) => this.me.set(m) });
       },
       error: (err) => {
-        this.redeeming.set(null);
+        this.busy.set(false);
         this.error.set(err?.error?.message ?? 'redemption failed');
       },
     });

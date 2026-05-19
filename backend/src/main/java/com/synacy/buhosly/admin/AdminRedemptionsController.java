@@ -1,5 +1,6 @@
 package com.synacy.buhosly.admin;
 
+import com.synacy.buhosly.common.ApiException;
 import com.synacy.buhosly.redemptions.Redemption;
 import com.synacy.buhosly.redemptions.RedemptionRepository;
 import com.synacy.buhosly.rewards.Reward;
@@ -18,7 +19,10 @@ import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -72,6 +76,40 @@ public class AdminRedemptionsController {
                 .body(sb.toString());
     }
 
+    @PostMapping("/{id}/approve")
+    @Transactional
+    public Map<String, Object> approve(@PathVariable UUID id) {
+        var redemption = requirePending(id);
+        redemption.setStatus(Redemption.STATUS_FULFILLED);
+        redemptions.save(redemption);
+        return toView(redemption, usersById(), rewardsById());
+    }
+
+    @PostMapping("/{id}/reject")
+    @Transactional
+    public Map<String, Object> reject(@PathVariable UUID id) {
+        var redemption = requirePending(id);
+        redemption.setStatus(Redemption.STATUS_CANCELLED);
+        redemptions.save(redemption);
+
+        // Refund the points snapshot back to the original redeemer.
+        users.findById(redemption.userId()).ifPresent(u -> {
+            u.setEarnedBalance(u.earnedBalance() + redemption.costPoints());
+            users.save(u);
+        });
+        return toView(redemption, usersById(), rewardsById());
+    }
+
+    private Redemption requirePending(UUID id) {
+        var redemption = redemptions.findById(id)
+                .orElseThrow(() -> ApiException.notFound("redemption not found"));
+        if (!Redemption.STATUS_PENDING.equals(redemption.status())) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.CONFLICT, "redemption is not pending");
+        }
+        return redemption;
+    }
+
     private List<Redemption> sortedRedemptions() {
         var all = new java.util.ArrayList<>(redemptions.findAll());
         all.sort(Comparator.comparing(Redemption::createdAt).reversed());
@@ -108,10 +146,6 @@ public class AdminRedemptionsController {
         return m;
     }
 
-    /**
-     * RFC 4180 CSV cell quoting: wrap in double quotes if the field contains a
-     * comma, double quote, or newline; double up any embedded double quotes.
-     */
     private static String csv(String raw) {
         if (raw == null) return "";
         var needsQuoting = raw.indexOf(',') >= 0 || raw.indexOf('"') >= 0 || raw.indexOf('\n') >= 0 || raw.indexOf('\r') >= 0;

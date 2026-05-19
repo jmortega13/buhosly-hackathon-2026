@@ -81,6 +81,30 @@ The system SHALL expose `GET /api/v1/admin/redemptions` returning every redempti
 - **WHEN** an admin calls `GET /api/v1/admin/redemptions`
 - **THEN** the response is HTTP 200 with an array of redemption objects covering every row in the `redemptions` table, ordered by `createdAt DESC`
 
+### Requirement: Approve or reject a pending redemption
+
+The system SHALL expose admin endpoints to transition a redemption from `pending` to either `fulfilled` (approve) or `cancelled` (reject). On **reject**, the redemption's `costPoints` snapshot MUST be refunded to the redeemer's `earnedBalance` inside the same transaction. Only redemptions currently in `pending` status are eligible — any other transition MUST be rejected with HTTP 409 so the admin doesn't accidentally double-refund or change the status of a settled redemption.
+
+#### Scenario: Admin approves a pending redemption
+
+- **WHEN** an admin calls `POST /api/v1/admin/redemptions/{id}/approve` on a redemption whose `status = "pending"`
+- **THEN** the system sets that redemption's `status = "fulfilled"`, makes NO change to any user balance, and returns HTTP 200 with the updated redemption
+
+#### Scenario: Admin rejects a pending redemption
+
+- **WHEN** an admin calls `POST /api/v1/admin/redemptions/{id}/reject` on a redemption whose `status = "pending"` and whose `costPoints = N`
+- **THEN** the system sets the redemption's `status = "cancelled"`, adds `N` back to the redeemer's `earnedBalance` (refund), and returns HTTP 200 with the updated redemption. Both writes happen inside one transaction; a failure mid-flight rolls back both.
+
+#### Scenario: Approve/reject of an already-settled redemption is refused
+
+- **WHEN** an admin calls approve or reject on a redemption whose `status` is already `fulfilled` or `cancelled`
+- **THEN** the system responds with HTTP 409 and the message "redemption is not pending"; no row is modified
+
+#### Scenario: Approve/reject of a non-existent redemption
+
+- **WHEN** the redemption id does not match any row in the `redemptions` table
+- **THEN** the system responds with HTTP 404 with the message "redemption not found"
+
 ### Requirement: CSV export of redemptions
 
 The system SHALL expose `GET /api/v1/admin/redemptions.csv` returning the same data as the JSON listing but encoded as a CSV file. The response MUST set `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="redemptions-YYYY-MM-DD.csv"`. The CSV MUST have a header row `id,createdAt,userEmail,userName,rewardName,costPoints,status` and one data row per redemption. The file can be opened directly in Google Sheets via File → Import.

@@ -703,9 +703,6 @@ export class ComposerComponent implements AfterViewInit {
     } else if (!message) {
       valid = false;
       hint = 'Add a message describing why';
-    } else if (hashtags.length === 0) {
-      valid = false;
-      hint = 'Add at least one #hashtag';
     }
 
     const totalCost = amount != null && recipientIds.length ? amount * recipientIds.length : 0;

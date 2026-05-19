@@ -2,11 +2,11 @@
 
 ### Requirement: Create a recognition for one or more recipients
 
-The system SHALL allow an authenticated user (the giver) to create a recognition that awards points to one or more other users (the recipients). The request MUST include a non-empty list of recipient identifiers, a positive integer `amount` interpreted as the points awarded **to each recipient**, a non-empty message, and at least one hashtag drawn from the configured list of company values. The request MAY include an optional `gifUrl` (a `https://`-scheme URL ≤ 2048 characters) which is persisted on every resulting recognition row and surfaced on the feed. The total cost charged to the giver SHALL be `amount × number of recipients`.
+The system SHALL allow an authenticated user (the giver) to create a recognition that awards points to one or more other users (the recipients). The request MUST include a non-empty list of recipient identifiers, a positive integer `amount` interpreted as the points awarded **to each recipient**, and a non-empty message. The request MAY optionally include hashtags (each must match the format rule when present, but the list is allowed to be empty or omitted) and a `gifUrl` (a `https://`-scheme URL ≤ 2048 characters) which is persisted on every resulting recognition row and surfaced on the feed. The total cost charged to the giver SHALL be `amount × number of recipients`.
 
 #### Scenario: Single-recipient recognition succeeds
 
-- **WHEN** an authenticated user POSTs a valid recognition with exactly one recipient (the recipient exists, `amount ≤ remaining giving balance`, message non-empty, at least one allowed hashtag)
+- **WHEN** an authenticated user POSTs a valid recognition with exactly one recipient (the recipient exists, `amount ≤ remaining giving balance`, message non-empty, hashtags either absent or every entry well-formed)
 - **THEN** the system appends one row to the `recognitions` sheet with a server-generated UUID, decrements the giver's `givingBalance` by `amount`, increments the recipient's `earnedBalance` by `amount`, and returns HTTP 201 with the created recognition
 
 #### Scenario: Multi-recipient recognition succeeds
@@ -72,7 +72,7 @@ The system SHALL reject any recognition whose total cost (`amount × number of r
 
 ### Requirement: Validate recipients and content
 
-The system SHALL reject recognitions whose recipient list is empty, whose recipient list contains any id that does not exist, whose message is empty, or whose hashtag list is empty or contains any value that does not match the hashtag format rule (see below). When at least one recipient id is missing, the entire request MUST be rejected; the system MUST NOT silently drop the missing id and process the valid recipients.
+The system SHALL reject recognitions whose recipient list is empty, whose recipient list contains any id that does not exist, whose message is empty, or whose hashtag list contains any value that does not match the hashtag format rule (see below). The hashtag list itself MAY be empty or omitted — hashtags are an optional adornment, not a requirement. When at least one recipient id is missing, the entire request MUST be rejected; the system MUST NOT silently drop the missing id and process the valid recipients.
 
 #### Scenario: Empty recipient list
 
@@ -94,14 +94,14 @@ The system SHALL reject recognitions whose recipient list is empty, whose recipi
 - **WHEN** any hashtag in the list fails the format rule `^[a-z0-9][a-z0-9_-]{0,63}$` (e.g., contains spaces, starts with a hyphen, contains uppercase letters or non-ASCII characters, or is longer than 64 characters)
 - **THEN** the system responds with HTTP 400 with a message identifying the malformed hashtag
 
-#### Scenario: No hashtags provided
+#### Scenario: No hashtags is accepted
 
-- **WHEN** the hashtag list is empty
-- **THEN** the system responds with HTTP 400 with the message "at least one hashtag is required"
+- **WHEN** the hashtag list is empty, omitted, or null
+- **THEN** the system accepts the recognition (assuming all other validations pass); the resulting rows persist an empty `hashtags` column and the feed item's `hashtags` array is empty
 
 ### Requirement: Hashtags are freeform and persisted as suggestions
 
-Hashtags SHALL NOT be restricted to a fixed allowlist. Any tag that matches the format rule is accepted. After the recognition is committed, the system MUST record each tag in the `hashtags` store so that subsequent users see it as a suggestion via the `hashtag-suggestions` capability. Recording MUST happen inside the same transaction as the recognition write so that a rolled-back give does not pollute the suggestion list.
+Hashtags SHALL NOT be restricted to a fixed allowlist; the list is optional and MAY be empty. Any tag that is included MUST match the format rule (case-insensitive normalised to lowercase). After the recognition is committed, the system MUST record each supplied tag in the `hashtags` store so that subsequent users see it as a suggestion via the `hashtag-suggestions` capability. Recording MUST happen inside the same transaction as the recognition write so that a rolled-back give does not pollute the suggestion list. An empty/omitted hashtag list MUST NOT touch the `hashtags` store.
 
 #### Scenario: Brand-new hashtag is accepted and persisted
 

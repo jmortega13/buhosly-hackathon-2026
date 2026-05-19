@@ -66,16 +66,15 @@ public class RecognitionService {
         if (message == null || message.isBlank()) {
             throw ApiException.badRequest("message is required");
         }
-        if (hashtagsIn == null || hashtagsIn.isEmpty()) {
-            throw ApiException.badRequest("at least one hashtag is required");
-        }
         var normalisedTags = new LinkedHashSet<String>();
-        for (var raw : hashtagsIn) {
-            var tag = HashtagService.normalize(raw);
-            if (!HashtagService.FORMAT.matcher(tag).matches()) {
-                throw ApiException.badRequest("malformed hashtag: " + raw);
+        if (hashtagsIn != null) {
+            for (var raw : hashtagsIn) {
+                var tag = HashtagService.normalize(raw);
+                if (!HashtagService.FORMAT.matcher(tag).matches()) {
+                    throw ApiException.badRequest("malformed hashtag: " + raw);
+                }
+                normalisedTags.add(tag);
             }
-            normalisedTags.add(tag);
         }
 
         var recipientsLoaded = new ArrayList<User>(recipientIds.size());

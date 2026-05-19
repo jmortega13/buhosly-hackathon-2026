@@ -135,6 +135,6 @@ public class RecognitionController {
             @NotEmpty List<String> recipientIds,
             @NotNull Integer amount,
             String message,
-            @NotEmpty List<String> hashtags,
+            List<String> hashtags,
             String gifUrl) {}
 }

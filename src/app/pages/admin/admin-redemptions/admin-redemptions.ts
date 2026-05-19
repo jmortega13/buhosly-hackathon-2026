@@ -32,6 +32,7 @@ import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
             <th>Reward</th>
             <th>Points</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -45,7 +46,29 @@ import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
               <td>{{ r.reward.name }}</td>
               <td>{{ r.costPoints }}</td>
               <td>
-                <span class="status" [class.pending]="r.status === 'pending'">{{ r.status }}</span>
+                <span class="status" [class.pending]="r.status === 'pending'" [class.fulfilled]="r.status === 'fulfilled'" [class.cancelled]="r.status === 'cancelled'">{{ r.status }}</span>
+              </td>
+              <td>
+                @if (r.status === 'pending') {
+                  <div class="actions-cell">
+                    <button
+                      type="button"
+                      class="approve"
+                      (click)="approve(r)"
+                      [disabled]="busyId() === r.id"
+                    >
+                      {{ busyId() === r.id ? '…' : 'Approve' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="reject"
+                      (click)="reject(r)"
+                      [disabled]="busyId() === r.id"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                }
               </td>
             </tr>
           }
@@ -113,17 +136,49 @@ import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
         background: var(--rise-warn-soft);
         color: var(--rise-warn);
       }
+      .status.fulfilled {
+        background: var(--rise-mint-soft);
+        color: var(--rise-mint);
+      }
+      .status.cancelled {
+        background: var(--rise-error-soft);
+        color: var(--rise-error);
+      }
+      .actions-cell {
+        display: flex;
+        gap: 0.35rem;
+      }
       button {
         background: var(--rise-pink);
         color: white;
         border: none;
-        padding: 0.5rem 1.2rem;
+        padding: 0.35rem 0.85rem;
         border-radius: 999px;
         font-weight: 600;
         cursor: pointer;
+        font-size: 0.85rem;
       }
-      button:hover:not(:disabled) {
+      button.primary {
+        background: var(--rise-pink);
+        padding: 0.5rem 1.2rem;
+      }
+      button.primary:hover:not(:disabled) {
         background: var(--rise-pink-deep);
+      }
+      button.approve {
+        background: var(--rise-mint);
+        color: #064e3b;
+      }
+      button.approve:hover:not(:disabled) {
+        background: #4ade80;
+      }
+      button.reject {
+        background: transparent;
+        color: var(--rise-error);
+        border: 1px solid var(--rise-error);
+      }
+      button.reject:hover:not(:disabled) {
+        background: var(--rise-error-soft);
       }
       button:disabled {
         opacity: 0.5;
@@ -142,17 +197,47 @@ export class AdminRedemptionsPage {
   protected readonly rows = signal<AdminRedemptionRow[]>([]);
   protected readonly loading = signal(true);
   protected readonly exporting = signal(false);
+  protected readonly busyId = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
 
   constructor() {
-    this.api.adminRedemptions().subscribe({
-      next: (rs) => {
-        this.rows.set(rs);
-        this.loading.set(false);
+    this.refresh();
+  }
+
+  protected approve(r: AdminRedemptionRow): void {
+    if (!confirm(`Approve "${r.reward.name}" for ${r.user.name}? Status will become "fulfilled".`)) return;
+    this.error.set(null);
+    this.busyId.set(r.id);
+    this.api.adminApproveRedemption(r.id).subscribe({
+      next: (updated) => {
+        this.busyId.set(null);
+        this.replace(updated);
       },
       error: (err) => {
-        this.loading.set(false);
-        this.error.set(err?.error?.message ?? 'failed to load');
+        this.busyId.set(null);
+        this.error.set(err?.error?.message ?? 'approve failed');
+      },
+    });
+  }
+
+  protected reject(r: AdminRedemptionRow): void {
+    if (
+      !confirm(
+        `Reject "${r.reward.name}" for ${r.user.name}? This refunds ${r.costPoints} pts to their earned balance and marks the redemption as cancelled.`
+      )
+    ) {
+      return;
+    }
+    this.error.set(null);
+    this.busyId.set(r.id);
+    this.api.adminRejectRedemption(r.id).subscribe({
+      next: (updated) => {
+        this.busyId.set(null);
+        this.replace(updated);
+      },
+      error: (err) => {
+        this.busyId.set(null);
+        this.error.set(err?.error?.message ?? 'reject failed');
       },
     });
   }
@@ -175,6 +260,24 @@ export class AdminRedemptionsPage {
       error: (err) => {
         this.exporting.set(false);
         this.error.set(err?.error?.message ?? 'export failed');
+      },
+    });
+  }
+
+  private replace(updated: AdminRedemptionRow): void {
+    this.rows.update((rows) => rows.map((r) => (r.id === updated.id ? updated : r)));
+  }
+
+  private refresh(): void {
+    this.loading.set(true);
+    this.api.adminRedemptions().subscribe({
+      next: (rs) => {
+        this.rows.set(rs);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.loading.set(false);
+        this.error.set(err?.error?.message ?? 'failed to load');
       },
     });
   }

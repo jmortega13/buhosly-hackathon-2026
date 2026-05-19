@@ -66,4 +66,11 @@ public class Redemption {
     public String status() {
         return status;
     }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public static final String STATUS_FULFILLED = "fulfilled";
+    public static final String STATUS_CANCELLED = "cancelled";
 }
