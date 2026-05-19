@@ -6,7 +6,7 @@ Birthday recognition is a high-signal, low-effort moment in workplace culture �
 
 - Add an optional `birthday` field (MM-DD only — no year, so we don't store DOB) to every user, settable from the user's own Profile page. Editing it requires no admin permission; it's the user's own data.
 - Show a **"🎂 It's <Name>'s birthday today"** banner at the top of the Feed for every active user whose birthday matches today (Asia/Manila local date). Clicking the banner pre-fills the composer with a birthday-themed recognition (`+10 @<handle> Happy birthday! 🎂 #birthday `) and focuses the textarea so the user can edit and send in two keystrokes.
-- **Auto top-up** the user's monthly giving balance by a configurable amount (default 20 pts; env-overridable) on the first `/api/v1/me` call of their birthday each year. The top-up fires AT MOST once per year per user, recorded by writing the current year into a new `last_birthday_topup_year` column. The user sees a one-shot celebratory toast.
+- **Auto-gift** the celebrant a configurable number of **earned points** (redeemable for rewards — `earned_balance`, not `giving_balance`) on the first `/api/v1/me` call of their birthday each year. Default 20 pts; env-overridable. The intent is a gift the celebrant can spend on themselves; adding to giving allowance would just make them work harder on their own birthday. The top-up fires AT MOST once per year per user, recorded by writing the current year into a new `last_birthday_topup_year` column. The user sees a one-shot celebratory toast.
 
 ## Capabilities
 

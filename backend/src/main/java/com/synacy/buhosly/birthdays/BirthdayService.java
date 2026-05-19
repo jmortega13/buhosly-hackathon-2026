@@ -77,7 +77,10 @@ public class BirthdayService {
         if (user.lastBirthdayTopupYear() != null && user.lastBirthdayTopupYear() == currentYear) {
             return false; // already topped up this year
         }
-        user.setGivingBalance(user.givingBalance() + props.allowance().birthdayTopUp());
+        // Birthday gift: extra *earned* points the celebrant can redeem for
+        // themselves. Adding to giving_balance would make them work harder on
+        // their own birthday, which is the opposite of the intent.
+        user.setEarnedBalance(user.earnedBalance() + props.allowance().birthdayTopUp());
         user.setLastBirthdayTopupYear(currentYear);
         users.save(user);
         return true;

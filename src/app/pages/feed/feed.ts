@@ -14,7 +14,7 @@ import { ComposerComponent } from '../../shared/composer/composer';
         <span class="cake">🎂</span>
         <div class="msg">
           <strong>Happy birthday, {{ me.name.split(' ')[0] }}!</strong>
-          <span>buhosly added <strong>+{{ topupAmount() }}</strong> giveable points to your balance — spread the love today.</span>
+          <span>buhosly gifted you <strong>+{{ topupAmount() }}</strong> earned points — go redeem yourself something nice 🎁</span>
         </div>
         <button type="button" (click)="dismissBirthdayToast()" aria-label="Dismiss">×</button>
       </div>

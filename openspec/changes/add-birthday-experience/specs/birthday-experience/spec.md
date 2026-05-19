@@ -55,19 +55,19 @@ The system SHALL expose `GET /api/v1/birthdays/today` returning every user whose
 
 ### Requirement: One-time-per-year birthday top-up
 
-The system SHALL automatically add the configured `app.allowance.birthday-top-up` value (default 20) to a user's `giving_balance` on the first `/api/v1/me` call of their birthday each calendar year. The fire-once guarantee MUST be enforced by storing the current year in `users.last_birthday_topup_year` inside the same transaction as the balance update; subsequent `/me` calls in the same year see the year already set and do nothing.
+The system SHALL automatically add the configured `app.allowance.birthday-top-up` value (default 20) to a user's **`earned_balance`** (redeemable for rewards — a gift the celebrant can spend on themselves, NOT extra giving allowance) on the first `/api/v1/me` call of their birthday each calendar year. The fire-once guarantee MUST be enforced by storing the current year in `users.last_birthday_topup_year` inside the same transaction as the balance update; subsequent `/me` calls in the same year see the year already set and do nothing.
 
-The check MUST happen AFTER the lazy monthly allowance refresh (so the top-up adds to the post-refresh balance, not the pre-refresh one). The `/me` response MUST include a `birthdayTopupAppliedToday` boolean which is `true` if the user's birthday is today (Asia/Manila) AND `last_birthday_topup_year` equals the current year — true throughout the day-of, regardless of whether the top-up just fired or fired earlier the same day. The frontend uses this flag to render the toast; deduplication of repeated toasts within one day is the frontend's responsibility.
+The check MUST happen AFTER the lazy monthly allowance refresh. The `/me` response MUST include a `birthdayTopupAppliedToday` boolean which is `true` if the user's birthday is today (Asia/Manila) AND `last_birthday_topup_year` equals the current year — true throughout the day-of, regardless of whether the top-up just fired or fired earlier the same day. The frontend uses this flag to render the toast; deduplication of repeated toasts within one day is the frontend's responsibility.
 
 #### Scenario: First /me call on the user's birthday
 
 - **WHEN** today's Asia/Manila date matches the user's `birthday`, `last_birthday_topup_year` is NOT the current year, and the user calls `/api/v1/me`
-- **THEN** the system adds the configured top-up amount to `giving_balance`, sets `last_birthday_topup_year` to the current year, returns the updated profile with `birthdayTopupAppliedToday: true`
+- **THEN** the system adds the configured top-up amount to `earned_balance`, sets `last_birthday_topup_year` to the current year, returns the updated profile with `birthdayTopupAppliedToday: true`
 
 #### Scenario: Subsequent /me calls on the same day
 
 - **WHEN** the user has already received their birthday top-up today and calls `/me` again
-- **THEN** the system does NOT change `giving_balance` and does NOT change `last_birthday_topup_year`; the response includes `birthdayTopupAppliedToday: true` (so a frontend refresh still knows it's the user's day)
+- **THEN** the system does NOT change `earned_balance` and does NOT change `last_birthday_topup_year`; the response includes `birthdayTopupAppliedToday: true` (so a frontend refresh still knows it's the user's day)
 
 #### Scenario: User without a birthday on file
 
@@ -79,10 +79,10 @@ The check MUST happen AFTER the lazy monthly allowance refresh (so the top-up ad
 - **WHEN** today's MM-DD does not match the user's `birthday`
 - **THEN** the response includes `birthdayTopupAppliedToday: false`; no top-up is applied
 
-#### Scenario: Top-up survives admin overrides
+#### Scenario: Giving balance is untouched by the birthday top-up
 
-- **WHEN** the user has a `monthly_allowance` override of 100 (set by an admin) and it's their birthday with a 20-pt top-up configured
-- **THEN** their `giving_balance` ends up at `(current balance) + 20`. The override is the BASE for monthly refresh; the top-up adds on top regardless.
+- **WHEN** a user receives their birthday top-up
+- **THEN** the user's `giving_balance` and any admin-set `monthly_allowance` override are completely unchanged. The birthday gift lives in `earned_balance` (redeemable rewards), not the monthly allowance for giving to others.
 
 #### Scenario: New year resets the fire-once gate
 
