@@ -15,6 +15,7 @@ import { FormsModule } from '@angular/forms';
 import 'emoji-picker-element';
 
 import { ApiService } from '../../core/api.service';
+import { CelebrateService } from '../../core/celebrate.service';
 import { GifResult, HashtagSuggestion, MeProfile, UserBrief } from '../../core/types';
 
 interface Trigger {
@@ -563,6 +564,7 @@ const TOKEN_REGEX = /(?<=^|\s)\+\d+(?=\s|$)|@[a-z0-9._-]+|#[a-z0-9_-]+/gi;
 })
 export class ComposerComponent implements AfterViewInit {
   private readonly api = inject(ApiService);
+  private readonly celebrate = inject(CelebrateService);
   private readonly host = inject(ElementRef<HTMLElement>);
 
   @ViewChild('textarea', { static: true }) private taRef!: ElementRef<HTMLTextAreaElement>;
@@ -878,6 +880,7 @@ export class ComposerComponent implements AfterViewInit {
           this.trigger.set(null);
           this.attachedGif.set(null);
           this.openPanel.set(null);
+          this.celebrate.recognition();
           this.refreshMe();
           this.api.hashtags().subscribe({ next: (hs) => this.hashtagsList.set(hs) });
           this.posted.emit();

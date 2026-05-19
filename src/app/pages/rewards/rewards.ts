@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 
 import { ApiService } from '../../core/api.service';
+import { CelebrateService } from '../../core/celebrate.service';
 import { MeProfile, Reward } from '../../core/types';
 
 @Component({
@@ -28,7 +29,7 @@ import { MeProfile, Reward } from '../../core/types';
                 <button
                   type="button"
                   [disabled]="!canAfford(r) || redeeming() === r.id"
-                  (click)="redeem(r)"
+                  (click)="redeem(r, $event)"
                 >
                   {{ redeeming() === r.id ? 'Redeeming…' : 'Redeem' }}
                 </button>
@@ -141,6 +142,7 @@ import { MeProfile, Reward } from '../../core/types';
 })
 export class RewardsPage {
   private readonly api = inject(ApiService);
+  private readonly celebrate = inject(CelebrateService);
 
   protected readonly rewards = signal<Reward[]>([]);
   protected readonly me = signal<MeProfile | null>(null);
@@ -158,14 +160,16 @@ export class RewardsPage {
     return m != null && m.earnedBalance >= r.costPoints;
   }
 
-  protected redeem(r: Reward): void {
+  protected redeem(r: Reward, event: MouseEvent): void {
     this.message.set(null);
     this.error.set(null);
     this.redeeming.set(r.id);
+    const anchor = event.currentTarget as HTMLElement | null;
     this.api.redeem(r.id).subscribe({
       next: () => {
         this.redeeming.set(null);
         this.message.set(`Redeemed "${r.name}" (${r.costPoints} pts).`);
+        this.celebrate.redemption(anchor);
         this.api.me().subscribe({ next: (m) => this.me.set(m) });
       },
       error: (err) => {
