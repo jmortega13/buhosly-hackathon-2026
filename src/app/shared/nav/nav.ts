@@ -22,8 +22,12 @@ import { MeProfile } from '../../core/types';
       </div>
       <div class="user">
         @if (me(); as m) {
-          <span class="badge giving" title="Giving balance (resets monthly)">G {{ m.givingBalance }}</span>
-          <span class="badge earned" title="Earned balance (redeemable)">E {{ m.earnedBalance }}</span>
+          <span class="badge giving" title="Resets at the start of every month">
+            Giveable Points: <strong>{{ m.givingBalance }}</strong>
+          </span>
+          <span class="badge earned" title="Available to redeem for rewards">
+            Earned Points: <strong>{{ m.earnedBalance }}</strong>
+          </span>
           <span class="name">{{ m.name }}</span>
         } @else if (auth.currentUser(); as u) {
           <span class="name">{{ u.name }}</span>
