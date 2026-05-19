@@ -16,6 +16,7 @@ public class Notification {
     public static final String TYPE_RECOGNITION_RECEIVED = "recognition_received";
     public static final String TYPE_GIVEABLE_REFRESHED = "giveable_refreshed";
     public static final String TYPE_GIVEABLE_EXPIRING = "giveable_expiring";
+    public static final String TYPE_BIRTHDAY_TOPUP = "birthday_topup";
 
     @Id
     private UUID id;

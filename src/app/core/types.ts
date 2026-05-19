@@ -144,7 +144,8 @@ export interface RewardSuggestion {
 export type NotificationType =
   | 'recognition_received'
   | 'giveable_refreshed'
-  | 'giveable_expiring';
+  | 'giveable_expiring'
+  | 'birthday_topup';
 
 export interface AppNotification {
   id: string;

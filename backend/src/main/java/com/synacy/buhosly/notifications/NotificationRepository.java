@@ -32,6 +32,25 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
             @Param("month") String month);
 
     /**
+     * True if the user already has a notification of the given type whose
+     * `payload` JSONB contains the supplied year key. Used to keep the
+     * `birthday_topup` notification idempotent across a calendar year — the
+     * top-up itself is dedup'd by `users.last_birthday_topup_year`, but
+     * gating the notification independently is defensive in case rows are
+     * ever deleted or backfilled.
+     */
+    @Query(
+            value =
+                    "SELECT EXISTS (SELECT 1 FROM notifications "
+                            + "WHERE user_id = :userId AND type = :type "
+                            + "AND payload->>'year' = :year)",
+            nativeQuery = true)
+    boolean existsForUserYear(
+            @Param("userId") UUID userId,
+            @Param("type") String type,
+            @Param("year") String year);
+
+    /**
      * Bulk mark-as-read. Returns affected count via JPA's standard
      * @Modifying contract.
      */

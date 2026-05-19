@@ -398,6 +398,8 @@ export class NavComponent implements OnDestroy {
         return '✨';
       case 'giveable_expiring':
         return '⏳';
+      case 'birthday_topup':
+        return '🎂';
     }
   }
 
@@ -472,6 +474,9 @@ export class NavComponent implements OnDestroy {
       case 'giveable_refreshed':
       case 'giveable_expiring':
         this.router.navigateByUrl('/feed');
+        break;
+      case 'birthday_topup':
+        this.router.navigateByUrl('/rewards');
         break;
     }
   }

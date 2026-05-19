@@ -2,6 +2,7 @@ package com.synacy.buhosly.birthdays;
 
 import com.synacy.buhosly.common.ApiException;
 import com.synacy.buhosly.config.AppProperties;
+import com.synacy.buhosly.notifications.NotificationService;
 import com.synacy.buhosly.users.User;
 import com.synacy.buhosly.users.UserRepository;
 import java.time.Clock;
@@ -23,11 +24,17 @@ public class BirthdayService {
     private final UserRepository users;
     private final AppProperties props;
     private final Clock clock;
+    private final NotificationService notifications;
 
-    public BirthdayService(UserRepository users, AppProperties props, Clock clock) {
+    public BirthdayService(
+            UserRepository users,
+            AppProperties props,
+            Clock clock,
+            NotificationService notifications) {
         this.users = users;
         this.props = props;
         this.clock = clock;
+        this.notifications = notifications;
     }
 
     /**
@@ -80,9 +87,11 @@ public class BirthdayService {
         // Birthday gift: extra *earned* points the celebrant can redeem for
         // themselves. Adding to giving_balance would make them work harder on
         // their own birthday, which is the opposite of the intent.
-        user.setEarnedBalance(user.earnedBalance() + props.allowance().birthdayTopUp());
+        int amount = props.allowance().birthdayTopUp();
+        user.setEarnedBalance(user.earnedBalance() + amount);
         user.setLastBirthdayTopupYear(currentYear);
         users.save(user);
+        notifications.birthdayTopUp(user, currentYear, amount);
         return true;
     }
 

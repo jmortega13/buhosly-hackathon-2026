@@ -104,6 +104,33 @@ public class NotificationService {
         email.send(n, user);
     }
 
+    /**
+     * Fire-once-per-year happy-birthday notification when the celebrant
+     * receives their automatic earned-points top-up. Idempotent on the
+     * calendar year via {@code existsForUserYear}, mirroring how the
+     * top-up itself is gated by {@code users.last_birthday_topup_year}.
+     */
+    public void birthdayTopUp(User user, int year, int amount) {
+        var yearKey = Integer.toString(year);
+        if (repo.existsForUserYear(user.id(), Notification.TYPE_BIRTHDAY_TOPUP, yearKey)) {
+            return;
+        }
+        var title = "🎂 Happy birthday! +" + amount + " earned points";
+        var body = "Enjoy " + amount + " earned points on us — they're already in your balance,"
+                + " ready to redeem for rewards.";
+        var payload = "{\"year\":\"" + yearKey + "\",\"amount\":" + amount + "}";
+        var n = new Notification(
+                UUID.randomUUID(),
+                user.id(),
+                Notification.TYPE_BIRTHDAY_TOPUP,
+                title,
+                body,
+                payload,
+                Instant.now());
+        repo.save(n);
+        email.send(n, user);
+    }
+
     public List<Notification> recent(UUID userId, int limit) {
         var capped = Math.min(Math.max(limit, 1), 100);
         return repo.findAllByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, capped));
