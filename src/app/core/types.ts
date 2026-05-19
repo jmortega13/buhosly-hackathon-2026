@@ -12,6 +12,7 @@ export interface MeProfile extends AuthUser {
   monthlyAllowance: number | null;
   birthday: string | null;
   birthdayTopupAppliedToday?: boolean;
+  birthdayTopUpAmount?: number;
 }
 
 export interface BirthdayUser {

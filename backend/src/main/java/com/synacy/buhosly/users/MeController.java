@@ -46,6 +46,7 @@ public class MeController {
         var view = toView(refreshed);
         view.put("isAdmin", isAdminEmail(refreshed.email()));
         view.put("birthdayTopupAppliedToday", birthdays.isBirthdayTodayWithTopup(refreshed));
+        view.put("birthdayTopUpAmount", props.allowance().birthdayTopUp());
         return view;
     }
 
@@ -60,6 +61,7 @@ public class MeController {
         var view = toView(user);
         view.put("isAdmin", isAdminEmail(user.email()));
         view.put("birthdayTopupAppliedToday", birthdays.isBirthdayTodayWithTopup(user));
+        view.put("birthdayTopUpAmount", props.allowance().birthdayTopUp());
         return view;
     }
 

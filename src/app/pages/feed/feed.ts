@@ -290,7 +290,7 @@ export class FeedPage {
   protected readonly hasMore = signal(false);
   protected readonly birthdays = signal<BirthdayUser[]>([]);
   protected readonly birthdayToast = signal<MeProfile | null>(null);
-  protected readonly topupAmount = signal<number>(20);
+  protected readonly topupAmount = signal<number>(0);
   private page = 0;
 
   constructor() {
@@ -355,6 +355,7 @@ export class FeedPage {
         const today = new Date().toISOString().slice(0, 10);
         const key = `birthdayToastShown:${today}`;
         if (localStorage.getItem(key)) return;
+        this.topupAmount.set(me.birthdayTopUpAmount ?? 0);
         this.birthdayToast.set(me);
         localStorage.setItem(key, '1');
         this.celebrate.recognition();
