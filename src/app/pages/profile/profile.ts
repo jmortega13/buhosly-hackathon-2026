@@ -60,15 +60,15 @@ const DAYS_IN_MONTH: Record<string, number> = {
             feed banner and the once-a-year giving-points top-up.
           </p>
           <div class="picker">
-            <select [(ngModel)]="month" name="month">
+            <select [ngModel]="month()" (ngModelChange)="onMonthChange($event)" name="month">
               <option value="">Month</option>
               @for (mo of months; track mo.value) {
                 <option [value]="mo.value">{{ mo.label }}</option>
               }
             </select>
-            <select [(ngModel)]="day" name="day" [disabled]="!month">
+            <select [ngModel]="day()" (ngModelChange)="day.set($event)" name="day" [disabled]="!month()">
               <option value="">Day</option>
-              @for (d of daysFor(month); track d) {
+              @for (d of daysFor(month()); track d) {
                 <option [value]="d">{{ d }}</option>
               }
             </select>
@@ -208,10 +208,10 @@ export class ProfilePage {
   protected readonly savedMessage = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
 
-  month = '';
-  day = '';
+  protected readonly month = signal('');
+  protected readonly day = signal('');
 
-  protected readonly canSave = computed(() => this.month !== '' && this.day !== '');
+  protected readonly canSave = computed(() => this.month() !== '' && this.day() !== '');
 
   constructor() {
     this.refresh();
@@ -228,9 +228,19 @@ export class ProfilePage {
     return `${month} ${parseInt(dd, 10)}`;
   }
 
+  protected onMonthChange(value: string): void {
+    this.month.set(value);
+    // Reset day if it exceeds the new month's day count.
+    const max = DAYS_IN_MONTH[value] ?? 31;
+    const current = parseInt(this.day(), 10);
+    if (!value || (current && current > max)) {
+      this.day.set('');
+    }
+  }
+
   protected save(): void {
     if (!this.canSave()) return;
-    const value = `${this.month}-${this.day.padStart(2, '0')}`;
+    const value = `${this.month()}-${this.day().padStart(2, '0')}`;
     this.busy.set(true);
     this.error.set(null);
     this.savedMessage.set(null);
@@ -256,8 +266,8 @@ export class ProfilePage {
       next: (m) => {
         this.busy.set(false);
         this.me.set(m);
-        this.month = '';
-        this.day = '';
+        this.month.set('');
+        this.day.set('');
         this.savedMessage.set('Birthday cleared.');
       },
       error: (err) => {
@@ -280,11 +290,11 @@ export class ProfilePage {
 
   private applyBirthdayInputs(value: string | null | undefined): void {
     if (!value) {
-      this.month = '';
-      this.day = '';
+      this.month.set('');
+      this.day.set('');
       return;
     }
-    this.month = value.substring(0, 2);
-    this.day = String(parseInt(value.substring(3, 5), 10));
+    this.month.set(value.substring(0, 2));
+    this.day.set(String(parseInt(value.substring(3, 5), 10)));
   }
 }
