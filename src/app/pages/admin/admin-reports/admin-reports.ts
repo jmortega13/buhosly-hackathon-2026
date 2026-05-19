@@ -194,6 +194,11 @@ import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
       .row h2 {
         margin: 0;
       }
+      .toggles {
+        display: inline-flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
       .toggle {
         display: inline-flex;
         background: var(--rise-card);
@@ -315,6 +320,67 @@ import { AdminTabsComponent } from '../admin-tabs/admin-tabs';
         color: var(--rise-error);
         margin: 0 0 0.75rem;
       }
+      .bars {
+        list-style: none;
+        margin: 0;
+        padding: 0.85rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+      }
+      .bars li {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .bar-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+      }
+      .bar-label .name {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .bar-label .tag {
+        flex: 0 0 auto;
+      }
+      .bar-value {
+        margin-left: auto;
+        font-weight: 700;
+        color: var(--rise-ink);
+        font-variant-numeric: tabular-nums;
+      }
+      .bar-track {
+        background: var(--rise-card-elev);
+        border: 1px solid var(--rise-line);
+        height: 10px;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.35s ease;
+      }
+      .bar-fill.hashtag {
+        background: linear-gradient(90deg, var(--rise-pink) 0%, var(--rise-pink-deep) 100%);
+      }
+      .bar-fill.leader {
+        background: linear-gradient(90deg, var(--rise-cyan-soft) 0%, var(--rise-cyan) 100%);
+      }
+      .bar-sub {
+        font-size: 0.78rem;
+      }
+      .rank.inline {
+        width: 22px;
+        height: 22px;
+        font-size: 0.75rem;
+      }
     `,
   ],
 })
@@ -322,6 +388,7 @@ export class AdminReportsPage {
   private readonly api = inject(ApiService);
 
   protected readonly window = signal<ReportWindow>('month');
+  protected readonly view = signal<'table' | 'chart'>('chart');
   protected readonly hashtags = signal<HashtagReportRow[]>([]);
   protected readonly leaders = signal<LeaderboardRow[]>([]);
   protected readonly loading = signal(true);
@@ -329,6 +396,17 @@ export class AdminReportsPage {
   protected readonly windowLabel = computed(() =>
     this.window() === 'month' ? 'This month' : 'All time',
   );
+  protected readonly maxHashtagCount = computed(() =>
+    this.hashtags().reduce((m, h) => Math.max(m, h.recognitionCount), 0),
+  );
+  protected readonly maxPointsReceived = computed(() =>
+    this.leaders().reduce((m, l) => Math.max(m, l.pointsReceived), 0),
+  );
+
+  protected pct(value: number, max: number): number {
+    if (max <= 0) return 0;
+    return Math.max(2, Math.round((value / max) * 100));
+  }
 
   private generation = 0;
 

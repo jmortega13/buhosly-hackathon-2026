@@ -87,7 +87,7 @@ The aggregation MUST be computed from the `recognitions` table — not from `use
 
 ### Requirement: Reports page in the admin UI
 
-The admin dashboard SHALL include a "Reports" tab routed at `/admin/reports` that renders both reports on one page with a shared **This month / All time** window toggle and a shared **Table / Chart** view toggle. The window toggle MUST default to **This month**; the view toggle MUST default to **Table**. When the window toggle is flipped, both lists MUST re-fetch from their respective endpoints with the matching `window` value. The view toggle MUST switch the presentation in place without re-fetching data. The page MUST show a loading state while either request is in flight and an empty-state message ("No activity in this window yet.") when both lists come back empty for the selected window.
+The admin dashboard SHALL include a "Reports" tab routed at `/admin/reports` that renders both reports on one page with a shared **This month / All time** window toggle and a shared **Table / Chart** view toggle. The window toggle MUST default to **This month**; the view toggle MUST default to **Chart**. When the window toggle is flipped, both lists MUST re-fetch from their respective endpoints with the matching `window` value. The view toggle MUST switch the presentation in place without re-fetching data. The page MUST show a loading state while either request is in flight and an empty-state message ("No activity in this window yet.") when both lists come back empty for the selected window.
 
 #### Scenario: Admin opens the Reports tab
 
