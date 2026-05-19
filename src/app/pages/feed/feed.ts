@@ -1,15 +1,37 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ViewChild, inject, signal } from '@angular/core';
 
 import { ApiService } from '../../core/api.service';
-import { FeedItem } from '../../core/types';
+import { CelebrateService } from '../../core/celebrate.service';
+import { BirthdayUser, FeedItem, MeProfile } from '../../core/types';
 import { ComposerComponent } from '../../shared/composer/composer';
 
 @Component({
   selector: 'app-feed',
   imports: [ComposerComponent],
   template: `
+    @if (birthdayToast(); as me) {
+      <div class="birthday-toast" role="status">
+        <span class="cake">🎂</span>
+        <div class="msg">
+          <strong>Happy birthday, {{ me.name.split(' ')[0] }}!</strong>
+          <span>buhosly added <strong>+{{ topupAmount() }}</strong> giveable points to your balance — spread the love today.</span>
+        </div>
+        <button type="button" (click)="dismissBirthdayToast()" aria-label="Dismiss">×</button>
+      </div>
+    }
+
     <section class="feed">
       <app-composer (posted)="onPosted()" />
+
+      @for (b of birthdays(); track b.id) {
+        <div class="birthday-banner" role="status">
+          <span class="cake">🎂</span>
+          <span class="msg">
+            It's <strong>{{ b.name }}</strong>'s birthday today —
+            <button type="button" class="link" (click)="celebrateBirthday(b)">send them recognition →</button>
+          </span>
+        </div>
+      }
 
       <h2>Recognition feed</h2>
       @if (loading() && items().length === 0) {
@@ -175,20 +197,106 @@ import { ComposerComponent } from '../../shared/composer/composer';
       .error {
         color: var(--rise-error);
       }
+
+      .birthday-banner,
+      .birthday-toast {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.7rem 1rem;
+        border-radius: 12px;
+        animation: slide-in 0.2s ease;
+      }
+      .birthday-banner {
+        background: linear-gradient(95deg, var(--rise-pink-soft), var(--rise-pink-tint));
+        border: 1px solid var(--rise-pink-soft);
+        color: var(--rise-pink-deep);
+      }
+      .birthday-toast {
+        max-width: 720px;
+        margin: 1.25rem auto 0;
+        padding: 0.85rem 1rem;
+        background: var(--rise-mint-soft);
+        border: 1px solid var(--rise-mint);
+        color: #064e3b;
+        box-shadow: 0 4px 16px rgba(17, 24, 39, 0.06);
+      }
+      .birthday-banner .cake,
+      .birthday-toast .cake {
+        font-size: 1.5rem;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .birthday-banner .msg,
+      .birthday-toast .msg {
+        flex: 1;
+        line-height: 1.4;
+      }
+      .birthday-toast .msg {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+      }
+      .birthday-toast .msg span {
+        font-size: 0.88rem;
+        opacity: 0.92;
+      }
+      .birthday-banner .link {
+        background: none;
+        border: none;
+        padding: 0;
+        margin: 0;
+        color: var(--rise-pink-deep);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: underline;
+        align-self: auto;
+      }
+      .birthday-banner .link:hover {
+        color: var(--rise-pink);
+      }
+      .birthday-toast button {
+        background: transparent;
+        border: none;
+        color: inherit;
+        font-size: 1.4rem;
+        line-height: 1;
+        padding: 0 0.35rem;
+        opacity: 0.55;
+        cursor: pointer;
+        align-self: flex-start;
+        margin: 0;
+      }
+      .birthday-toast button:hover {
+        opacity: 1;
+      }
+      @keyframes slide-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: none; }
+      }
     `,
   ],
 })
 export class FeedPage {
   private readonly api = inject(ApiService);
+  private readonly celebrate = inject(CelebrateService);
+
+  @ViewChild(ComposerComponent) composer?: ComposerComponent;
 
   protected readonly items = signal<FeedItem[]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly hasMore = signal(false);
+  protected readonly birthdays = signal<BirthdayUser[]>([]);
+  protected readonly birthdayToast = signal<MeProfile | null>(null);
+  protected readonly topupAmount = signal<number>(20);
   private page = 0;
 
   constructor() {
     this.loadMore();
+    this.loadBirthdays();
+    this.maybeShowBirthdayToast();
   }
 
   loadMore(): void {
@@ -213,6 +321,45 @@ export class FeedPage {
     this.page = 0;
     this.hasMore.set(false);
     this.loadMore();
+  }
+
+  protected celebrateBirthday(user: BirthdayUser): void {
+    this.composer?.prefillBirthday(user);
+    // Smooth-scroll the page to the composer so the user sees the pre-filled text.
+    queueMicrotask(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  protected dismissBirthdayToast(): void {
+    this.birthdayToast.set(null);
+  }
+
+  private loadBirthdays(): void {
+    this.api.birthdaysToday().subscribe({
+      next: (rows) => this.birthdays.set(rows),
+      error: () => this.birthdays.set([]),
+    });
+  }
+
+  /**
+   * Show the celebratory mint toast at most once per calendar day per user,
+   * keyed off localStorage so a reload doesn't re-show. /me already carries
+   * the `birthdayTopupAppliedToday` flag, which stays true all day on the
+   * user's birthday after the top-up — the localStorage gate de-dupes.
+   */
+  private maybeShowBirthdayToast(): void {
+    this.api.me().subscribe({
+      next: (me) => {
+        if (!me.birthdayTopupAppliedToday) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const key = `birthdayToastShown:${today}`;
+        if (localStorage.getItem(key)) return;
+        this.birthdayToast.set(me);
+        localStorage.setItem(key, '1');
+        this.celebrate.recognition();
+      },
+    });
   }
 
   protected relative(iso: string): string {

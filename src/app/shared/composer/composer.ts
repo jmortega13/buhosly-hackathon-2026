@@ -737,6 +737,27 @@ export class ComposerComponent implements AfterViewInit {
     this.taRef.nativeElement.focus();
   }
 
+  /**
+   * Public hook called by the Feed page when the user clicks a birthday
+   * banner. Drops the recipient into the mention map and primes the textarea
+   * with a birthday-themed recognition that the user can tweak before sending.
+   */
+  public prefillBirthday(user: { id: string; name: string; email: string }): void {
+    const handle = this.handleOf(user);
+    this.mentionMap.set(handle, { id: user.id, name: user.name });
+    const message = `+10 @${handle} Happy birthday! 🎂 #birthday `;
+    this.text.set(message);
+    this.attachedGif.set(null);
+    this.openPanel.set(null);
+    this.trigger.set(null);
+    queueMicrotask(() => {
+      const ta = this.taRef.nativeElement;
+      ta.focus();
+      ta.setSelectionRange(message.length, message.length);
+      this.onScroll();
+    });
+  }
+
   protected onInput(): void {
     this.trigger.set(this.detectTrigger());
     this.selectedIndex.set(0);

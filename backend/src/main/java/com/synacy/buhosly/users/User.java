@@ -37,6 +37,12 @@ public class User {
     @Column(name = "monthly_allowance")
     private Integer monthlyAllowance;
 
+    @Column(name = "birthday", length = 5)
+    private String birthday;
+
+    @Column(name = "last_birthday_topup_year")
+    private Integer lastBirthdayTopupYear;
+
     @Version
     @Column(name = "row_version", nullable = false)
     private int rowVersion;
@@ -92,6 +98,14 @@ public class User {
         return monthlyAllowance;
     }
 
+    public String birthday() {
+        return birthday;
+    }
+
+    public Integer lastBirthdayTopupYear() {
+        return lastBirthdayTopupYear;
+    }
+
     public int rowVersion() {
         return rowVersion;
     }
@@ -110,5 +124,13 @@ public class User {
 
     public void setMonthlyAllowance(Integer monthlyAllowance) {
         this.monthlyAllowance = monthlyAllowance;
+    }
+
+    public void setBirthday(String birthday) {
+        this.birthday = birthday;
+    }
+
+    public void setLastBirthdayTopupYear(Integer year) {
+        this.lastBirthdayTopupYear = year;
     }
 }

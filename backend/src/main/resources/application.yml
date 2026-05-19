@@ -37,13 +37,14 @@ app:
   auth:
     # Comma-separated list of email domains allowed at sign-in. Override at
     # deploy time with ALLOWED_DOMAINS=synacy.com,rise.com,other.com (no spaces).
-    allowed-domains: ${ALLOWED_DOMAINS:synacy.com,rise.com}
+    allowed-domains: ${ALLOWED_DOMAINS:synacy.com,rise.ph}
     admin-emails: ${ADMIN_EMAILS:}
     google:
       client-id: ${GOOGLE_CLIENT_ID:}
 
   allowance:
     default-points: 30
+    birthday-top-up: ${BIRTHDAY_TOP_UP:20}
     zone: Asia/Manila
 
   feed:

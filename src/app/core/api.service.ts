@@ -7,6 +7,7 @@ import {
   AdminRedemptionRow,
   AdminRewardRow,
   AdminUserRow,
+  BirthdayUser,
   FeedPage,
   GifResult,
   GiveRequest,
@@ -28,6 +29,14 @@ export class ApiService {
 
   me(): Observable<MeProfile> {
     return this.http.get<MeProfile>(`${this.base}/me`);
+  }
+
+  setBirthday(birthday: string | null): Observable<MeProfile> {
+    return this.http.put<MeProfile>(`${this.base}/me/birthday`, { birthday });
+  }
+
+  birthdaysToday(): Observable<BirthdayUser[]> {
+    return this.http.get<BirthdayUser[]>(`${this.base}/birthdays/today`);
   }
 
   listUsers(): Observable<UserBrief[]> {

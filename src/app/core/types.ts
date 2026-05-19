@@ -10,6 +10,14 @@ export interface MeProfile extends AuthUser {
   givingMonth: string;
   earnedBalance: number;
   monthlyAllowance: number | null;
+  birthday: string | null;
+  birthdayTopupAppliedToday?: boolean;
+}
+
+export interface BirthdayUser {
+  id: string;
+  name: string;
+  email: string;
 }
 
 export interface AdminUserRow {

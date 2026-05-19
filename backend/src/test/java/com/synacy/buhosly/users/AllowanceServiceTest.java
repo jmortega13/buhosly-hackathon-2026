@@ -28,7 +28,7 @@ class AllowanceServiceTest {
                     List.of("synacy.com", "rise.com"),
                     List.of(),
                     new AppProperties.Auth.Google("client-id")),
-            new AppProperties.Allowance(30, "Asia/Manila"),
+            new AppProperties.Allowance(30, 20, "Asia/Manila"),
             new AppProperties.Feed(25, 100),
             new AppProperties.Giphy(""));
 

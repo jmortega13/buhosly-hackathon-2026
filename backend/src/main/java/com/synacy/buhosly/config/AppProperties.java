@@ -15,7 +15,7 @@ public record AppProperties(
         public record Google(String clientId) {}
     }
 
-    public record Allowance(int defaultPoints, String zone) {}
+    public record Allowance(int defaultPoints, int birthdayTopUp, String zone) {}
 
     public record Feed(int defaultPageSize, int maxPageSize) {}
 
