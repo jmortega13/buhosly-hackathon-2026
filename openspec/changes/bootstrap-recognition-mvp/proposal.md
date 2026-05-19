@@ -27,7 +27,8 @@ Out of scope for this proposal: Slack/Teams integrations, add-on/pile-on points,
 - `rewards-catalog`: Listing of available rewards and the redemption flow that debits the earned balance and records a redemption.
 - `hashtag-suggestions`: A persistent set of hashtags that grows whenever any user uses a tag in a recognition, exposed via an API the composer uses to drive its `#` typeahead.
 - `gif-search`: A server-proxied GIF search powered by the Giphy API. The composer hits a backend endpoint with a query string; the backend forwards to Giphy using a server-side API key and returns a slim `{id, previewUrl, gifUrl, alt}` shape.
-- `admin-dashboard`: An admin-only surface (gated by an `app.auth.admin-emails` allowlist) for managing the rewards catalog, adjusting individual users' allowances, viewing every redemption, and exporting the redemption list as CSV.
+- `admin-dashboard`: An admin-only surface (gated by an `app.auth.admin-emails` allowlist) for managing the rewards catalog, adjusting individual users' allowances, viewing every redemption (with approve / reject + refund flow), and exporting the redemption list as CSV.
+- `reward-suggestions`: A user-driven backlog where any teammate can suggest a new reward and upvote suggestions made by others. Admins see the full backlog and can promote a popular suggestion into a real reward (with an admin-set point cost) or dismiss it.
 
 ### Modified Capabilities
 

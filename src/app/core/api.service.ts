@@ -10,10 +10,14 @@ import {
   FeedPage,
   GifResult,
   GiveRequest,
+  HashtagReportRow,
   HashtagSuggestion,
+  LeaderboardRow,
   MeProfile,
   Redemption,
+  ReportWindow,
   Reward,
+  RewardSuggestion,
   UserBrief,
 } from './types';
 
@@ -121,5 +125,51 @@ export class ApiService {
 
   adminRedemptionsCsv(): Observable<Blob> {
     return this.http.get(`${this.base}/admin/redemptions.csv`, { responseType: 'blob' });
+  }
+
+  adminReportHashtags(window: ReportWindow): Observable<HashtagReportRow[]> {
+    const params = new HttpParams().set('window', window);
+    return this.http.get<HashtagReportRow[]>(`${this.base}/admin/reports/hashtags`, { params });
+  }
+
+  adminReportLeaderboard(window: ReportWindow): Observable<LeaderboardRow[]> {
+    const params = new HttpParams().set('window', window);
+    return this.http.get<LeaderboardRow[]>(`${this.base}/admin/reports/leaderboard`, { params });
+  }
+
+  // ----- reward suggestions (user-facing) -----
+
+  suggestions(): Observable<RewardSuggestion[]> {
+    return this.http.get<RewardSuggestion[]>(`${this.base}/suggestions`);
+  }
+
+  createSuggestion(body: {
+    name: string;
+    description: string;
+    imageUrl: string;
+  }): Observable<RewardSuggestion> {
+    return this.http.post<RewardSuggestion>(`${this.base}/suggestions`, body);
+  }
+
+  voteSuggestion(id: string): Observable<RewardSuggestion> {
+    return this.http.post<RewardSuggestion>(`${this.base}/suggestions/${id}/vote`, {});
+  }
+
+  deleteSuggestion(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/suggestions/${id}`);
+  }
+
+  // ----- reward suggestions (admin) -----
+
+  adminSuggestions(): Observable<RewardSuggestion[]> {
+    return this.http.get<RewardSuggestion[]>(`${this.base}/admin/suggestions`);
+  }
+
+  adminPromoteSuggestion(id: string, body: { costPoints: number; imageUrl?: string }): Observable<unknown> {
+    return this.http.post(`${this.base}/admin/suggestions/${id}/promote`, body);
+  }
+
+  adminDismissSuggestion(id: string): Observable<RewardSuggestion> {
+    return this.http.post<RewardSuggestion>(`${this.base}/admin/suggestions/${id}/dismiss`, {});
   }
 }

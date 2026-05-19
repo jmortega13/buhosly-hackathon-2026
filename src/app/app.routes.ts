@@ -30,6 +30,16 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/redemptions/redemptions').then((m) => m.RedemptionsPage),
   },
   {
+    path: 'suggestions',
+    canActivate: [authGuard],
+    loadComponent: () => import('./pages/suggestions/suggestions').then((m) => m.SuggestionsPage),
+  },
+  {
+    path: 'admin/suggestions',
+    canActivate: [adminGuard],
+    loadComponent: () => import('./pages/admin/admin-suggestions/admin-suggestions').then((m) => m.AdminSuggestionsPage),
+  },
+  {
     path: 'admin/users',
     canActivate: [adminGuard],
     loadComponent: () => import('./pages/admin/admin-users/admin-users').then((m) => m.AdminUsersPage),
@@ -43,6 +53,11 @@ export const routes: Routes = [
     path: 'admin/redemptions',
     canActivate: [adminGuard],
     loadComponent: () => import('./pages/admin/admin-redemptions/admin-redemptions').then((m) => m.AdminRedemptionsPage),
+  },
+  {
+    path: 'admin/reports',
+    canActivate: [adminGuard],
+    loadComponent: () => import('./pages/admin/admin-reports/admin-reports').then((m) => m.AdminReportsPage),
   },
   { path: 'admin', redirectTo: 'admin/users', pathMatch: 'full' },
   { path: '**', redirectTo: 'feed' },

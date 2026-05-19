@@ -8,7 +8,9 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
     <nav class="tabs">
       <a routerLink="/admin/users" routerLinkActive="active">Users</a>
       <a routerLink="/admin/rewards" routerLinkActive="active">Rewards</a>
+      <a routerLink="/admin/suggestions" routerLinkActive="active">Suggestions</a>
       <a routerLink="/admin/redemptions" routerLinkActive="active">Redemptions</a>
+      <a routerLink="/admin/reports" routerLinkActive="active">Reports</a>
     </nav>
   `,
   styles: [

@@ -14,6 +14,7 @@ import { MeProfile } from '../../core/types';
       <div class="links">
         <a routerLink="/feed" routerLinkActive="active">Feed</a>
         <a routerLink="/rewards" routerLinkActive="active">Rewards</a>
+        <a routerLink="/suggestions" routerLinkActive="active">Suggestions</a>
         <a routerLink="/redemptions" routerLinkActive="active">My redemptions</a>
         <a routerLink="/profile" routerLinkActive="active">Profile</a>
         @if (auth.currentUser()?.isAdmin) {

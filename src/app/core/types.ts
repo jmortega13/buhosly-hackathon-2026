@@ -104,3 +104,31 @@ export interface HashtagSuggestion {
   usageCount: number;
   lastUsedAt: string;
 }
+
+export type ReportWindow = 'month' | 'all';
+
+export interface HashtagReportRow {
+  tag: string;
+  recognitionCount: number;
+  pointsTotal: number;
+  lastUsedAt: string;
+}
+
+export interface LeaderboardRow {
+  user: { id: string; name: string; email: string };
+  pointsReceived: number;
+  recognitionCount: number;
+}
+
+export interface RewardSuggestion {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  suggestedBy: { id: string; name: string };
+  voteCount: number;
+  hasVoted: boolean;
+  status: 'open' | 'promoted' | 'dismissed';
+  createdAt: string;
+  promotedRewardId?: string;
+}

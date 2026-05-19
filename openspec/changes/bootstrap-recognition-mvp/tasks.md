@@ -85,6 +85,14 @@
 - [ ] 7c.9 Implement `AdminRedemptionsController`: `GET /api/v1/admin/redemptions` returning all redemptions joined to user + reward names, ordered by `createdAt DESC`. Plus `GET /api/v1/admin/redemptions.csv` returning the same data as RFC-4180 CSV with `Content-Type: text/csv; charset=utf-8` and `Content-Disposition: attachment; filename="redemptions-YYYY-MM-DD.csv"`. CSV header: `id,createdAt,userEmail,userName,rewardName,costPoints,status`.
 - [ ] 7c.10 Add `POST /api/v1/admin/redemptions/{id}/approve` and `POST /api/v1/admin/redemptions/{id}/reject` for the admin redemption workflow. Both are `@Transactional`. Approve sets `status = "fulfilled"`; reject sets `status = "cancelled"` AND refunds `costPoints` to the redeemer's `earnedBalance` in the same transaction. Both 404 on missing, 409 on non-pending source state.
 
+## 7d. Domain: reward suggestions
+
+- [ ] 7d.1 Flyway `V9__reward_suggestions.sql` creates two tables: `reward_suggestions (id, name, description, image_url, suggested_by_user_id, created_at, status, promoted_reward_id)` plus an index on `(status, created_at DESC)`; and `reward_suggestion_votes (suggestion_id, user_id, voted_at)` with composite PK and `ON DELETE CASCADE` on `suggestion_id` so deleting a suggestion cleans up its votes.
+- [ ] 7d.2 Implement `RewardSuggestion` and `RewardSuggestionVote` JPA entities (vote uses `@IdClass` for the composite key) plus their repositories. The vote repository exposes `countBySuggestionId`, `existsBySuggestionIdAndUserId`, `findBySuggestionIdAndUserId`, and `findAllBySuggestionIdIn` for batch lookup.
+- [ ] 7d.3 Implement `RewardSuggestionService.create / listOpen / toggleVote / delete` (`@Transactional`): create inserts the suggestion + auto-votes the suggester; list joins vote counts and the requester's hasVoted flag in one batch; toggleVote inserts or removes; delete enforces suggester-or-admin and lets DB cascade votes.
+- [ ] 7d.4 Implement `RewardSuggestionsController` (user-facing): `GET /api/v1/suggestions`, `POST /api/v1/suggestions`, `POST /api/v1/suggestions/{id}/vote`, `DELETE /api/v1/suggestions/{id}`.
+- [ ] 7d.5 Implement `AdminRewardSuggestionsController`: `GET /api/v1/admin/suggestions` returning all rows (any status) ordered by `created_at DESC`; `POST /api/v1/admin/suggestions/{id}/promote {costPoints, imageUrl?}` (creates a Reward in the same transaction + flips status to `promoted` with `promoted_reward_id` set); `POST /api/v1/admin/suggestions/{id}/dismiss`. State-transition guards: 409 on non-open source.
+
 ## 8. Frontend: shared infrastructure
 
 - [x] 8.1 Create `src/environments/environment.ts` with `apiBaseUrl: 'http://localhost:8080/api/v1'` and `googleClientId`.
@@ -115,6 +123,8 @@
 - [x] 9.8 Top nav with name, giving/earned balance badges, logout button.
 - [ ] 9.9 Add an `AdminGuard` that redirects non-admins to `/feed`; show the "Admin" link in the top nav only when `auth.currentUser()?.isAdmin === true`.
 - [ ] 9.10 Build admin pages under `/admin`: **Users** (list + per-row "Top up" and "Set monthly allowance" forms), **Rewards** (table + "Add reward" form + inline edit + soft-delete button), **Redemptions** (table + "Export CSV" button that fetches `/admin/redemptions.csv` as a blob and triggers a browser download with a date-stamped filename).
+- [ ] 9.11 Build the user-facing **`/suggestions`** page: a "Suggest a reward" form at the top (name + optional description + optional image URL), followed by a list of open suggestions ordered by vote count. Each card shows name, description, image (if provided), the suggester's name, the vote count, and a toggle button (filled when `hasVoted = true`, outlined otherwise). The suggester sees a small "Delete" link on their own cards.
+- [ ] 9.12 Build the admin **`/admin/suggestions`** page (new entry in the `AdminTabsComponent`): a table of every suggestion regardless of status, with `Promote` and `Dismiss` actions on open rows. Promote opens a modal asking for `costPoints` and an optional `imageUrl`, then calls the promote endpoint. Status badges color-code open / promoted / dismissed.
 
 ## 10. End-to-end verification
 
