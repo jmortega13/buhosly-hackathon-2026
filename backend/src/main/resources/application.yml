@@ -2,6 +2,15 @@ spring:
   application:
     name: buhosly
 
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/buhosly}
     username: ${SPRING_DATASOURCE_USERNAME:buhosly}
@@ -53,6 +62,13 @@ app:
 
   giphy:
     api-key: ${GIPHY_API_KEY:}
+
+  mail:
+    # From-address used for notification emails. If unset (or SMTP_HOST is
+    # unset), emails are silently skipped — in-app notifications still work.
+    from: ${MAIL_FROM:noreply@buhosly.demo}
+    # Front-end origin used to build links in notification emails.
+    web-base-url: ${WEB_BASE_URL:http://localhost:4200}
 
 logging:
   level:

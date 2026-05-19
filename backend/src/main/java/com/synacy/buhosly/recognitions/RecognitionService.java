@@ -2,6 +2,7 @@ package com.synacy.buhosly.recognitions;
 
 import com.synacy.buhosly.common.ApiException;
 import com.synacy.buhosly.hashtags.HashtagService;
+import com.synacy.buhosly.notifications.NotificationService;
 import com.synacy.buhosly.users.AllowanceService;
 import com.synacy.buhosly.users.User;
 import com.synacy.buhosly.users.UserRepository;
@@ -27,16 +28,19 @@ public class RecognitionService {
     private final AllowanceService allowance;
     private final RecognitionRepository recognitions;
     private final HashtagService hashtags;
+    private final NotificationService notifications;
 
     public RecognitionService(
             UserRepository users,
             AllowanceService allowance,
             RecognitionRepository recognitions,
-            HashtagService hashtags) {
+            HashtagService hashtags,
+            NotificationService notifications) {
         this.users = users;
         this.allowance = allowance;
         this.recognitions = recognitions;
         this.hashtags = hashtags;
+        this.notifications = notifications;
     }
 
     @Transactional
@@ -125,6 +129,11 @@ public class RecognitionService {
             giver.setGivingBalance(giver.givingBalance() - totalCost);
             users.save(giver);
             hashtags.recordAll(normalisedTags);
+            // Fire one notification per recipient inside the same transaction
+            // — a rolled-back give produces no notification.
+            for (int i = 0; i < created.size(); i++) {
+                notifications.recognitionReceived(giver, recipientsLoaded.get(i), created.get(i));
+            }
         } catch (RuntimeException e) {
             log.error(
                     "Give recognition failed: giverId={}, recipients={}, amount={}",

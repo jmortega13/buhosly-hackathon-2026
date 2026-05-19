@@ -7,6 +7,7 @@ import {
   AdminRedemptionRow,
   AdminRewardRow,
   AdminUserRow,
+  AppNotification,
   BirthdayUser,
   FeedPage,
   GifResult,
@@ -180,5 +181,25 @@ export class ApiService {
 
   adminDismissSuggestion(id: string): Observable<RewardSuggestion> {
     return this.http.post<RewardSuggestion>(`${this.base}/admin/suggestions/${id}/dismiss`, {});
+  }
+
+  // ----- notifications -----
+
+  notifications(limit?: number): Observable<AppNotification[]> {
+    let params = new HttpParams();
+    if (limit != null) params = params.set('limit', limit);
+    return this.http.get<AppNotification[]>(`${this.base}/notifications`, { params });
+  }
+
+  unreadNotificationCount(): Observable<{ count: number }> {
+    return this.http.get<{ count: number }>(`${this.base}/notifications/unread-count`);
+  }
+
+  markNotificationRead(id: string): Observable<AppNotification> {
+    return this.http.post<AppNotification>(`${this.base}/notifications/${id}/read`, {});
+  }
+
+  markAllNotificationsRead(): Observable<{ updated: number }> {
+    return this.http.post<{ updated: number }>(`${this.base}/notifications/read-all`, {});
   }
 }

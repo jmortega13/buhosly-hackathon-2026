@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
-        Cors cors, Jwt jwt, Auth auth, Allowance allowance, Feed feed, Giphy giphy) {
+        Cors cors, Jwt jwt, Auth auth, Allowance allowance, Feed feed, Giphy giphy, Mail mail) {
 
     public record Cors(List<String> allowedOrigins) {}
 
@@ -20,4 +20,6 @@ public record AppProperties(
     public record Feed(int defaultPageSize, int maxPageSize) {}
 
     public record Giphy(String apiKey) {}
+
+    public record Mail(String from, String webBaseUrl) {}
 }

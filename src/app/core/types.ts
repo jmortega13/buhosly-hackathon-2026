@@ -140,3 +140,18 @@ export interface RewardSuggestion {
   createdAt: string;
   promotedRewardId?: string;
 }
+
+export type NotificationType =
+  | 'recognition_received'
+  | 'giveable_refreshed'
+  | 'giveable_expiring';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+  readAt: string | null;
+}
