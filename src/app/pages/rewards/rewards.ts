@@ -8,6 +8,27 @@ import { MeProfile, Reward } from '../../core/types';
   selector: 'app-rewards',
   template: `
     <section class="rewards">
+      @if (message(); as msg) {
+        <div class="toast success" role="status">
+          <span class="toast-icon" aria-hidden="true">✓</span>
+          <div class="toast-body">
+            <strong>Redemption queued</strong>
+            <span>{{ msg }} It's now <em>pending</em> admin approval — track it under "My redemptions".</span>
+          </div>
+          <button type="button" class="toast-close" (click)="dismissMessage()" aria-label="Dismiss">×</button>
+        </div>
+      }
+      @if (error(); as err) {
+        <div class="toast error" role="alert">
+          <span class="toast-icon" aria-hidden="true">!</span>
+          <div class="toast-body">
+            <strong>Something went wrong</strong>
+            <span>{{ err }}</span>
+          </div>
+          <button type="button" class="toast-close" (click)="dismissError()" aria-label="Dismiss">×</button>
+        </div>
+      }
+
       <h2>Rewards</h2>
       @if (me(); as m) {
         <p class="balance">Your earned balance: <strong>{{ m.earnedBalance }}</strong></p>
@@ -38,8 +59,6 @@ import { MeProfile, Reward } from '../../core/types';
           </div>
         }
       </div>
-      @if (message()) { <p class="success">{{ message() }}</p> }
-      @if (error()) { <p class="error">{{ error() }}</p> }
     </section>
 
     @if (confirming(); as r) {
@@ -177,11 +196,77 @@ import { MeProfile, Reward } from '../../core/types';
       .muted {
         color: var(--rise-muted);
       }
-      .success {
-        color: var(--rise-mint);
+
+      /* Toast banner — sits at the top of the page above the H2. */
+      .toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.85rem;
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        margin: 0 0 1.25rem;
+        border: 1px solid;
+        box-shadow: 0 4px 16px rgba(17, 24, 39, 0.06);
+        animation: slide-in 0.18s ease;
       }
-      .error {
+      .toast.success {
+        background: var(--rise-mint-soft);
+        border-color: var(--rise-mint);
+        color: #064e3b;
+      }
+      .toast.error {
+        background: var(--rise-error-soft);
+        border-color: var(--rise-error);
         color: var(--rise-error);
+      }
+      .toast-icon {
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        color: white;
+      }
+      .toast.success .toast-icon { background: var(--rise-mint); color: #064e3b; }
+      .toast.error .toast-icon   { background: var(--rise-error); color: white; }
+      .toast-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        line-height: 1.4;
+      }
+      .toast-body strong {
+        font-size: 0.95rem;
+      }
+      .toast-body span {
+        font-size: 0.88rem;
+        opacity: 0.92;
+      }
+      .toast-body em {
+        font-style: normal;
+        font-weight: 600;
+      }
+      .toast-close {
+        background: transparent;
+        border: none;
+        color: inherit;
+        opacity: 0.55;
+        font-size: 1.4rem;
+        line-height: 1;
+        padding: 0 0.35rem;
+        cursor: pointer;
+        align-self: flex-start;
+        margin-top: -0.1rem;
+      }
+      .toast-close:hover {
+        opacity: 1;
+      }
+      @keyframes slide-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: none; }
       }
 
       /* Confirmation modal */
@@ -303,6 +388,7 @@ export class RewardsPage {
   protected readonly error = signal<string | null>(null);
 
   private redeemAnchor: HTMLElement | null = null;
+  private dismissTimer?: number;
 
   protected readonly balanceAfter = computed(() => {
     const m = this.me();
@@ -342,7 +428,7 @@ export class RewardsPage {
       next: () => {
         this.busy.set(false);
         this.confirming.set(null);
-        this.message.set(`Redeemed "${r.name}" (${r.costPoints} pts).`);
+        this.flashMessage(`Redeemed "${r.name}" for ${r.costPoints} pts.`);
         // Burst from the original card button when possible; fall back to the
         // modal's confirm button (which is what the user just clicked).
         this.celebrate.redemption(this.redeemAnchor ?? confirmBtn);
@@ -353,6 +439,24 @@ export class RewardsPage {
         this.error.set(err?.error?.message ?? 'redemption failed');
       },
     });
+  }
+
+  protected dismissMessage(): void {
+    this.message.set(null);
+    if (this.dismissTimer != null) {
+      window.clearTimeout(this.dismissTimer);
+      this.dismissTimer = undefined;
+    }
+  }
+
+  protected dismissError(): void {
+    this.error.set(null);
+  }
+
+  private flashMessage(text: string): void {
+    this.message.set(text);
+    if (this.dismissTimer != null) window.clearTimeout(this.dismissTimer);
+    this.dismissTimer = window.setTimeout(() => this.message.set(null), 6000);
   }
 
   private refresh(): void {
